@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏记录系统</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-gamepad"></i> 坑仔的游戏记录</h1>
+            <p>-今年肝了多少游戏？-</p>
+            <button class="btn btn-add" onclick="gameTracker.openModal()">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="btn btn-settings" onclick="gameTracker.openSettingsModal()">
+                <i class="fas fa-cog"></i>
+            </button>
+        </header>
+
+        <div class="main-content">
+            <!-- 游戏列表 -->
+            <div class="games-section">
+                <div class="games-header">
+                    <h2><i class="fas fa-list"></i> 游戏记录</h2>
+                    <div class="sort-controls">
+                        <div class="sort-group">
+                            <label for="sortBy">排序方式：</label>
+                            <select id="sortBy" onchange="gameTracker.updateSort()">
+                                <option value="completionDate">通关时间</option>
+                                <option value="platform">平台</option>
+                                <option value="name">游戏名称</option>
+                                <option value="metacriticScore">Metacritic评分</option>
+                            </select>
+                        </div>
+                        <div class="sort-group">
+                            <label for="sortOrder">排序顺序：</label>
+                            <select id="sortOrder" onchange="gameTracker.updateSort()">
+                                <option value="desc">降序（最新/最新添加）</option>
+                                <option value="asc">升序（最早/最早添加）</option>
+                            </select>
+                        </div>
+                        <div class="data-controls">
+                            <button class="btn btn-secondary btn-sm" onclick="gameTracker.exportData()">
+                                <i class="fas fa-download"></i> 导出数据
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="gameTracker.importData()">
+                                <i class="fas fa-upload"></i> 导入数据
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="gamesList" class="games-list">
+                    <!-- 游戏记录将在这里动态显示 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加游戏模态框 -->
+    <div id="addGameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus"></i> 添加新游戏</h2>
+                <button class="btn btn-icon" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addGameForm" class="add-game-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="gameName">游戏名称 *</label>
+                            <input type="text" id="gameName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="gameOriginalName">游戏原名</label>
+                            <input type="text" id="gameOriginalName" placeholder="可选：填写游戏的原始名称">
+                        </div>
+                    </div>
+                                         <div class="form-row">
+                         <div class="form-group">
+                             <label for="gamePlatform">平台</label>
+                             <select id="gamePlatform">
+                                 <option value="">选择平台</option>
+                                 <!-- 平台选项将动态生成 -->
+                             </select>
+                         </div>
+                         <div class="form-group">
+                             <label for="gameCompletionDate">通关日期</label>
+                             <input type="date" id="gameCompletionDate">
+                         </div>
+                     </div>
+                     <div class="form-row">
+                         <div class="form-group">
+                             <label for="gameMetacriticScore">Metacritic评分</label>
+                             <div class="metacritic-container">
+                                 <input type="number" id="gameMetacriticScore" min="0" max="100" placeholder="0-100">
+                                 <button type="button" class="btn btn-secondary btn-sm" id="fetchMetacriticBtn">
+                                     <i class="fas fa-search"></i> 自动获取
+                                 </button>
+                             </div>
+                             <small class="form-help">可选：手动输入或自动获取Metacritic评分</small>
+                         </div>
+                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="gameCover">游戏封面</label>
+                            <div class="file-upload-container">
+                                <input type="file" id="gameCover" accept="image/*" class="file-input">
+                                <label for="gameCover" class="file-upload-label">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <span>选择图片文件</span>
+                                </label>
+                                <div id="coverPreview" class="cover-preview" style="display: none;">
+                                    <img id="previewImage" src="" alt="预览">
+                                    <button type="button" id="removeCover" class="btn btn-danger btn-sm">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="form-help">可选：上传游戏封面图片（支持 JPG、PNG、GIF 格式）</small>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> 添加游戏
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="resetForm">
+                            <i class="fas fa-undo"></i> 重置
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="cancelAdd">
+                            <i class="fas fa-times"></i> 取消
+                        </button>
+                        <button type="button" class="btn btn-danger" id="deleteGameBtn" style="display: none;">
+                            <i class="fas fa-trash"></i> 删除游戏
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content settings-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> 平台设置</h2>
+                <button class="btn btn-icon" id="closeSettingsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>平台管理</h3>
+                    <div class="platform-list" id="platformList">
+                        <!-- 平台列表将动态生成 -->
+                    </div>
+                    <button class="btn btn-primary" onclick="gameTracker.addNewPlatform()">
+                        <i class="fas fa-plus"></i> 添加平台
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
