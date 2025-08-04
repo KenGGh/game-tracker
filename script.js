@@ -226,7 +226,7 @@ class GameTracker {
         });
     }
 
-    openModal(gameId = null) {
+    async openModal(gameId = null) {
         document.getElementById('addGameModal').classList.add('show');
         document.body.style.overflow = 'hidden';
         
@@ -235,7 +235,7 @@ class GameTracker {
         if (gameId) {
             // 编辑模式
             this.currentEditingGameId = gameId;
-            this.fillFormWithGameData(gameId);
+            await this.fillFormWithGameData(gameId);
             document.querySelector('.modal-header h2').innerHTML = '<i class="fas fa-edit"></i> 编辑游戏';
             document.querySelector('.form-actions button[type="submit"]').innerHTML = '<i class="fas fa-save"></i> 保存修改';
             deleteBtn.style.display = 'inline-flex';
@@ -252,7 +252,7 @@ class GameTracker {
         }
     }
 
-    fillFormWithGameData(gameId) {
+    async fillFormWithGameData(gameId) {
         const game = this.games.find(g => g.id === gameId);
         if (!game) return;
 
@@ -263,8 +263,20 @@ class GameTracker {
         document.getElementById('gameMetacriticScore').value = game.metacriticScore || '';
 
         // 处理封面图片预览
-        if (game.cover) {
-            document.getElementById('previewImage').src = game.cover;
+        let coverSrc = null;
+        
+        if (game.imageId) {
+            // 优先使用新的imageId系统
+            coverSrc = await this.getImage(game.imageId);
+        }
+        
+        if (!coverSrc && game.cover) {
+            // 如果没有通过imageId获取到图片，尝试使用旧的cover字段
+            coverSrc = game.cover;
+        }
+        
+        if (coverSrc) {
+            document.getElementById('previewImage').src = coverSrc;
             document.getElementById('coverPreview').style.display = 'block';
         } else {
             document.getElementById('coverPreview').style.display = 'none';
@@ -678,14 +690,27 @@ class GameTracker {
 
     async createGameCard(game) {
         let coverImage = '';
+        
+        // 优先使用新的imageId系统
         if (game.imageId) {
             const imageData = await this.getImage(game.imageId);
-            coverImage = imageData ? 
-                `<img src="${imageData}" alt="${this.escapeHtml(game.name)}" class="game-cover">` : 
-                `<div class="game-cover-placeholder">
-                    <i class="fas fa-gamepad"></i>
-                </div>`;
+            if (imageData) {
+                coverImage = `<img src="${imageData}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
+            } else {
+                // 如果imageId存在但获取不到图片，尝试使用旧的cover字段
+                if (game.cover) {
+                    coverImage = `<img src="${this.escapeHtml(game.cover)}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
+                } else {
+                    coverImage = `<div class="game-cover-placeholder">
+                        <i class="fas fa-gamepad"></i>
+                    </div>`;
+                }
+            }
+        } else if (game.cover) {
+            // 如果没有imageId但有旧的cover字段，直接使用
+            coverImage = `<img src="${this.escapeHtml(game.cover)}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
         } else {
+            // 没有任何封面数据
             coverImage = `<div class="game-cover-placeholder">
                 <i class="fas fa-gamepad"></i>
             </div>`;
@@ -1241,23 +1266,54 @@ class GameTracker {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.onchange = (e) => {
+        input.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     
+                    // 处理游戏数据，转换旧格式的封面
                     if (data.games && Array.isArray(data.games)) {
-                        this.games = data.games;
-                        this.saveGames();
+                        console.log('开始处理游戏数据...');
+                        const processedGames = [];
+                        
+                        for (const game of data.games) {
+                            const processedGame = { ...game };
+                            
+                            // 如果游戏有旧格式的cover字段，转换为新格式
+                            if (game.cover && !game.imageId) {
+                                try {
+                                    const imageId = `game_${game.id}_cover`;
+                                    await this.saveImage(imageId, game.cover);
+                                    processedGame.imageId = imageId;
+                                    delete processedGame.cover; // 删除旧的cover字段
+                                    console.log(`转换游戏 ${game.name} 的封面成功`);
+                                } catch (error) {
+                                    console.error(`转换游戏 ${game.name} 的封面失败:`, error);
+                                    // 如果转换失败，保留原有的cover字段作为备用
+                                }
+                            }
+                            
+                            processedGames.push(processedGame);
+                        }
+                        
+                        this.games = processedGames;
+                        await this.saveGames();
+                        console.log('游戏数据处理完成');
                     }
                     
+                    // 处理平台数据
                     if (data.platforms && Array.isArray(data.platforms)) {
-                        this.platforms = data.platforms;
-                        this.savePlatforms();
+                        // 为旧平台数据添加order属性
+                        this.platforms = data.platforms.map((platform, index) => ({
+                            ...platform,
+                            order: platform.order !== undefined ? platform.order : index
+                        }));
+                        await this.savePlatforms();
+                        console.log('平台数据处理完成');
                     }
                     
                     if (data.sortBy) {
@@ -1271,7 +1327,7 @@ class GameTracker {
                     }
                     
                     this.updatePlatformOptions();
-                    this.renderGames();
+                    await this.renderGames();
                     this.initSortControls();
                     
                     this.showNotification('数据导入成功！', 'success');
