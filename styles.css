@@ -92,6 +92,14 @@ body {
 
 .settings-section {
     margin-bottom: 30px;
+    padding-bottom: 30px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .settings-section h3 {
@@ -101,6 +109,37 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.settings-section h3 i {
+    color: #667eea;
+    font-size: 1.2rem;
+}
+
+.settings-input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #f8fafc;
+    color: #4a5568;
+    transition: all 0.3s ease;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.settings-section .form-group {
+    margin-bottom: 15px;
+}
+
+.settings-section .form-group:last-child {
+    margin-bottom: 0;
 }
 
 .platform-list {
@@ -757,12 +796,14 @@ body {
     right: 0;
     padding: 8px 15px;
     color: white;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 650;
     z-index: 10;
     backdrop-filter: blur(10px);
     text-align: center;
     border-radius: 0;
+    letter-spacing: 0.3px;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.1);
 }
 
 .game-title {
@@ -779,6 +820,52 @@ body {
     font-style: italic;
     margin-bottom: 6px;
     line-height: 1.2;
+}
+
+/* 添加游戏卡片样式 */
+.add-game-card {
+    background: #f7fafc;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    border: 2px dashed #e2e8f0;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    position: relative;
+    color: #718096;
+}
+
+.add-game-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+    border-color: #667eea;
+    background: #fff;
+    color: #667eea;
+}
+
+.add-game-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+}
+
+.add-game-content i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.add-game-content span {
+    font-size: 1.1rem;
+    font-weight: 600;
+    opacity: 0.9;
 }
 
 .game-meta {

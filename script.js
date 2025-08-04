@@ -1,10 +1,128 @@
 class GameTracker {
     constructor() {
-        this.games = JSON.parse(localStorage.getItem('games')) || [];
-        this.platforms = JSON.parse(localStorage.getItem('platforms')) || this.getDefaultPlatforms();
+        this.games = [];
+        this.platforms = [];
         this.sortBy = localStorage.getItem('sortBy') || 'completionDate';
         this.sortOrder = localStorage.getItem('sortOrder') || 'desc';
-        this.init();
+        this.mainTitle = localStorage.getItem('mainTitle') || '坑仔的游戏记录';
+        this.subTitle = localStorage.getItem('subTitle') || '-今年肝了多少游戏？-';
+        this.dbName = 'gameTrackerDB';
+        this.dbVersion = 2; // 增加版本号以触发数据库升级
+        this.db = null;
+        this.initDB().then(() => {
+            this.loadData().then(() => {
+                this.init();
+            });
+        });
+    }
+
+    async initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+
+            request.onerror = (event) => {
+                console.error('数据库打开失败:', event.target.error);
+                reject(event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                this.db = event.target.result;
+                console.log('数据库连接成功');
+                resolve();
+            };
+
+            request.onupgradeneeded = (event) => {
+                console.log('数据库升级中...');
+                const db = event.target.result;
+                const oldVersion = event.oldVersion;
+                const newVersion = event.newVersion;
+                console.log(`数据库版本从 ${oldVersion} 升级到 ${newVersion}`);
+                
+                // 如果存在旧的存储对象，先删除它们
+                if (db.objectStoreNames.contains('platforms')) {
+                    db.deleteObjectStore('platforms');
+                }
+                if (db.objectStoreNames.contains('games')) {
+                    db.deleteObjectStore('games');
+                }
+                if (db.objectStoreNames.contains('images')) {
+                    db.deleteObjectStore('images');
+                }
+                
+                // 创建游戏数据存储
+                const gamesStore = db.createObjectStore('games', { keyPath: 'id' });
+                gamesStore.createIndex('addedAt', 'addedAt', { unique: false });
+                
+                // 创建平台数据存储，添加排序索引
+                const platformsStore = db.createObjectStore('platforms', { keyPath: 'id' });
+                platformsStore.createIndex('order', 'order', { unique: false });
+                
+                // 创建图片数据存储
+                db.createObjectStore('images', { keyPath: 'id' });
+                
+                console.log('数据库结构升级完成');
+            };
+        });
+    }
+
+    async loadData() {
+        try {
+            // 加载游戏数据
+            this.games = await this.getAllFromStore('games') || [];
+            
+            // 加载平台数据
+            const platforms = await this.getAllFromStore('platforms');
+            if (!platforms || platforms.length === 0) {
+                // 如果没有保存的平台数据，使用默认平台
+                this.platforms = this.getDefaultPlatforms().map((platform, index) => ({
+                    ...platform,
+                    order: index
+                }));
+                await this.savePlatforms();
+            } else {
+                // 使用保存的平台数据，按order属性排序
+                this.platforms = platforms.sort((a, b) => {
+                    const orderA = typeof a.order === 'number' ? a.order : 999;
+                    const orderB = typeof b.order === 'number' ? b.order : 999;
+                    return orderA - orderB;
+                });
+                console.log('加载的平台数据（已排序）:', this.platforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+            }
+        } catch (error) {
+            console.error('加载数据失败:', error);
+            this.showNotification('加载数据失败', 'error');
+        }
+    }
+
+    async getAllFromStore(storeName) {
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(storeName, 'readonly');
+            const store = transaction.objectStore(storeName);
+            const request = store.getAll();
+
+            // 等待事务完成的Promise
+            const transactionComplete = new Promise((transResolve, transReject) => {
+                transaction.oncomplete = () => transResolve();
+                transaction.onerror = () => transReject(transaction.error);
+                transaction.onabort = () => transReject(new Error('Transaction aborted'));
+            });
+
+            request.onsuccess = async () => {
+                try {
+                    await transactionComplete;
+                    console.log(`从 ${storeName} 加载数据:`, request.result); // 添加日志
+                    resolve(request.result);
+                } catch (error) {
+                    console.error(`从 ${storeName} 加载数据失败:`, error);
+                    reject(error);
+                }
+            };
+
+            request.onerror = () => {
+                console.error(`从 ${storeName} 加载数据失败:`, request.error);
+                reject(request.error);
+            };
+        });
     }
 
     getDefaultPlatforms() {
@@ -24,6 +142,33 @@ class GameTracker {
         this.renderGames();
         this.updatePlatformOptions();
         this.initSortControls();
+        this.updateTitles();
+        this.initTitleInputs();
+    }
+
+    updateTitles() {
+        document.querySelector('.header h1').innerHTML = `<i class="fas fa-gamepad"></i> ${this.escapeHtml(this.mainTitle)}`;
+        document.querySelector('.header p').textContent = this.subTitle;
+    }
+
+    initTitleInputs() {
+        const mainTitleInput = document.getElementById('mainTitle');
+        const subTitleInput = document.getElementById('subTitle');
+        
+        mainTitleInput.value = this.mainTitle;
+        subTitleInput.value = this.subTitle;
+        
+        mainTitleInput.addEventListener('change', () => {
+            this.mainTitle = mainTitleInput.value.trim() || '游戏记录';
+            localStorage.setItem('mainTitle', this.mainTitle);
+            this.updateTitles();
+        });
+        
+        subTitleInput.addEventListener('change', () => {
+            this.subTitle = subTitleInput.value.trim() || '';
+            localStorage.setItem('subTitle', this.subTitle);
+            this.updateTitles();
+        });
     }
 
     bindEvents() {
@@ -39,6 +184,25 @@ class GameTracker {
 
         // Metacritic评分获取事件
         document.getElementById('fetchMetacriticBtn').addEventListener('click', () => this.fetchMetacriticScore());
+
+        // 通关日期输入验证
+        document.getElementById('gameCompletionDate').addEventListener('input', (e) => {
+            const dateInput = e.target;
+            const dateValue = dateInput.value;
+            
+            if (dateValue) {
+                const date = new Date(dateValue);
+                const year = date.getFullYear();
+                
+                // 检查年份是否在合理范围内
+                if (year < 1990 || year > 2099) {
+                    dateInput.setCustomValidity('请输入1990年到2099年之间的日期');
+                    this.showNotification('请输入合理的年份（1990-2099）', 'error');
+                } else {
+                    dateInput.setCustomValidity('');
+                }
+            }
+        });
 
         // 模态框事件
         document.getElementById('closeModal').addEventListener('click', () => this.closeModal());
@@ -113,7 +277,7 @@ class GameTracker {
         this.resetForm();
     }
 
-    handleFileUpload(event) {
+    async handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
@@ -129,15 +293,62 @@ class GameTracker {
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const previewImage = document.getElementById('previewImage');
-            const coverPreview = document.getElementById('coverPreview');
+        try {
+            // 压缩图片
+            const compressedImage = await this.compressImage(file);
             
-            previewImage.src = e.target.result;
-            coverPreview.style.display = 'block';
-        };
-        reader.readAsDataURL(file);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const previewImage = document.getElementById('previewImage');
+                const coverPreview = document.getElementById('coverPreview');
+                
+                previewImage.src = e.target.result;
+                coverPreview.style.display = 'block';
+            };
+            reader.readAsDataURL(compressedImage);
+        } catch (error) {
+            console.error('处理图片失败:', error);
+            this.showNotification('处理图片失败', 'error');
+        }
+    }
+
+    async compressImage(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 设置最大尺寸
+                const MAX_SIZE = 800;
+                if (width > height && width > MAX_SIZE) {
+                    height = Math.round((height * MAX_SIZE) / width);
+                    width = MAX_SIZE;
+                } else if (height > MAX_SIZE) {
+                    width = Math.round((width * MAX_SIZE) / height);
+                    height = MAX_SIZE;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 转换为Blob
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, file.type, 0.8); // 压缩质量为0.8
+            };
+            
+            img.onerror = () => reject(new Error('图片加载失败'));
+            
+            const reader = new FileReader();
+            reader.onload = (e) => img.src = e.target.result;
+            reader.onerror = () => reject(new Error('读取文件失败'));
+            reader.readAsDataURL(file);
+        });
     }
 
     removeCover() {
@@ -198,44 +409,71 @@ class GameTracker {
         }
     }
 
-    saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData) {
-        this.games[gameIndex] = {
-            ...this.games[gameIndex],
-            name: gameName,
-            originalName: gameOriginalName,
-            platform: gamePlatform,
-            completionDate: gameCompletionDate || null,
-            metacriticScore: gameMetacriticScore || null,
-            cover: coverData
-        };
+    async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData) {
+        try {
+            const game = this.games[gameIndex];
+            let imageId = game.imageId;
 
-        this.saveGames();
-        this.renderGames();
-        this.closeModal();
-        
-        this.showNotification('游戏信息更新成功！', 'success');
+            if (coverData) {
+                // 如果有新的封面图片
+                if (!imageId) {
+                    imageId = `game_${game.id}_cover`;
+                }
+                await this.saveImage(imageId, coverData);
+            }
+
+            this.games[gameIndex] = {
+                ...game,
+                name: gameName,
+                originalName: gameOriginalName,
+                platform: gamePlatform,
+                completionDate: gameCompletionDate || null,
+                metacriticScore: gameMetacriticScore || null,
+                imageId: imageId
+            };
+
+            await this.saveGames();
+            await this.renderGames();
+            this.closeModal();
+            
+            this.showNotification('游戏信息更新成功！', 'success');
+        } catch (error) {
+            console.error('更新游戏失败:', error);
+            this.showNotification('更新游戏失败', 'error');
+        }
     }
 
-    saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameMetacriticScore, coverData) {
-        const game = {
-            id: Date.now(),
-            name: gameName,
-            originalName: gameOriginalName, // 添加原名
-            platform: gamePlatform,
-            completionDate: completionDate || null,
-            metacriticScore: gameMetacriticScore || null,
-            cover: coverData,
-            notes: '', // 备注信息移除
-            addedAt: new Date().toISOString()
-        };
+    async saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameMetacriticScore, coverData) {
+        const gameId = Date.now();
+        let imageId = null;
 
-        this.games.push(game);
-        this.saveGames();
-        this.renderGames();
-        this.closeModal();
-        
-        // 显示成功消息
-        this.showNotification('游戏添加成功！', 'success');
+        try {
+            if (coverData) {
+                imageId = `game_${gameId}_cover`;
+                await this.saveImage(imageId, coverData);
+            }
+
+            const game = {
+                id: gameId,
+                name: gameName,
+                originalName: gameOriginalName,
+                platform: gamePlatform,
+                completionDate: completionDate || null,
+                metacriticScore: gameMetacriticScore || null,
+                imageId: imageId,
+                addedAt: new Date().toISOString()
+            };
+
+            this.games.push(game);
+            await this.saveGames();
+            await this.renderGames();
+            this.closeModal();
+            
+            this.showNotification('游戏添加成功！', 'success');
+        } catch (error) {
+            console.error('保存游戏失败:', error);
+            this.showNotification('保存游戏失败', 'error');
+        }
     }
 
     resetForm() {
@@ -262,8 +500,60 @@ class GameTracker {
         }
     }
 
-    saveGames() {
-        localStorage.setItem('games', JSON.stringify(this.games));
+    async saveGames() {
+        try {
+            const transaction = this.db.transaction('games', 'readwrite');
+            const store = transaction.objectStore('games');
+            
+            // 清空现有数据
+            await new Promise((resolve, reject) => {
+                const clearRequest = store.clear();
+                clearRequest.onsuccess = () => resolve();
+                clearRequest.onerror = () => reject(clearRequest.error);
+            });
+            
+            // 保存所有游戏数据
+            for (const game of this.games) {
+                await new Promise((resolve, reject) => {
+                    const request = store.put(game);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        } catch (error) {
+            console.error('保存游戏数据失败:', error);
+            this.showNotification('保存游戏数据失败', 'error');
+        }
+    }
+
+    async saveImage(imageId, imageData) {
+        try {
+            const transaction = this.db.transaction('images', 'readwrite');
+            const store = transaction.objectStore('images');
+            await new Promise((resolve, reject) => {
+                const request = store.put({ id: imageId, data: imageData });
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('保存图片失败:', error);
+            throw error;
+        }
+    }
+
+    async getImage(imageId) {
+        try {
+            const transaction = this.db.transaction('images', 'readonly');
+            const store = transaction.objectStore('images');
+            return new Promise((resolve, reject) => {
+                const request = store.get(imageId);
+                request.onsuccess = () => resolve(request.result ? request.result.data : null);
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('获取图片失败:', error);
+            return null;
+        }
     }
 
     getPlatformClass(platform) {
@@ -289,7 +579,7 @@ class GameTracker {
         return 'other';
     }
 
-    renderGames() {
+    async renderGames() {
         const gamesList = document.getElementById('gamesList');
 
         if (this.games.length === 0) {
@@ -297,7 +587,7 @@ class GameTracker {
                 <div class="no-games">
                     <i class="fas fa-gamepad"></i>
                     <h3>还没有游戏记录</h3>
-                    <p>点击右上角的 + 按钮添加第一个游戏</p>
+                    <p>点击右上角的"+"按钮开始添加游戏吧！</p>
                 </div>
             `;
             return;
@@ -335,8 +625,9 @@ class GameTracker {
         let html = '';
         
         // 渲染有通关日期的游戏（按年份分组）
-        sortedYears.forEach(year => {
+        for (const year of sortedYears) {
             const yearGames = gamesByYear[year];
+            const gameCards = await Promise.all(yearGames.map(game => this.createGameCard(game)));
             
             html += `
                 <div class="year-section">
@@ -346,14 +637,22 @@ class GameTracker {
                         <span class="game-count">${yearGames.length}个</span>
                     </div>
                     <div class="games-grid">
-                        ${yearGames.map(game => this.createGameCard(game)).join('')}
+                        ${gameCards.join('')}
+                        <div class="add-game-card" onclick="gameTracker.openModal()" role="button" tabindex="0" aria-label="添加新游戏" title="添加新游戏">
+                            <div class="add-game-content">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                <span>添加游戏</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
-        });
+        }
         
         // 渲染没有通关日期的游戏
         if (gamesWithoutDate.length > 0) {
+            const gameCards = await Promise.all(gamesWithoutDate.map(game => this.createGameCard(game)));
+            
             html += `
                 <div class="year-section">
                     <div class="year-title">
@@ -362,7 +661,13 @@ class GameTracker {
                         <span class="game-count">${gamesWithoutDate.length}个</span>
                     </div>
                     <div class="games-grid">
-                        ${gamesWithoutDate.map(game => this.createGameCard(game)).join('')}
+                        ${gameCards.join('')}
+                        <div class="add-game-card" onclick="gameTracker.openModal()" role="button" tabindex="0" aria-label="添加新游戏" title="添加新游戏">
+                            <div class="add-game-content">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                <span>添加游戏</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -371,12 +676,20 @@ class GameTracker {
         gamesList.innerHTML = html;
     }
 
-    createGameCard(game) {
-        const coverImage = game.cover ? 
-            `<img src="${this.escapeHtml(game.cover)}" alt="${this.escapeHtml(game.name)}" class="game-cover">` : 
-            `<div class="game-cover-placeholder">
+    async createGameCard(game) {
+        let coverImage = '';
+        if (game.imageId) {
+            const imageData = await this.getImage(game.imageId);
+            coverImage = imageData ? 
+                `<img src="${imageData}" alt="${this.escapeHtml(game.name)}" class="game-cover">` : 
+                `<div class="game-cover-placeholder">
+                    <i class="fas fa-gamepad"></i>
+                </div>`;
+        } else {
+            coverImage = `<div class="game-cover-placeholder">
                 <i class="fas fa-gamepad"></i>
             </div>`;
+        }
 
         const platformClass = this.getPlatformClass(game.platform);
         const platform = this.platforms.find(p => p.id === platformClass);
@@ -466,7 +779,7 @@ class GameTracker {
         const searchTerm = gameOriginalName || gameName;
         
         if (!searchTerm) {
-            this.showNotification('请先输入游戏名称或原名！', 'error');
+            this.showNotification('请先输入游戏名称或外文名！', 'error');
             return;
         }
 
@@ -511,40 +824,70 @@ class GameTracker {
     }
 
     initDragAndDrop() {
-        const platformItems = document.querySelectorAll('.platform-item');
+        const platformList = document.getElementById('platformList');
+        let draggedItem = null;
         
-        platformItems.forEach(item => {
+        // 为每个平台项添加拖放事件
+        const addDragEvents = (item) => {
             item.setAttribute('draggable', 'true');
             
-            item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', item.dataset.platformId);
-                item.classList.add('dragging');
+            item.addEventListener('dragstart', () => {
+                draggedItem = item;
+                setTimeout(() => item.classList.add('dragging'), 0);
             });
             
-            item.addEventListener('dragend', (e) => {
+            item.addEventListener('dragend', () => {
+                draggedItem = null;
                 item.classList.remove('dragging');
             });
-        });
-
-        const platformList = document.getElementById('platformList');
+            
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (!draggedItem || item === draggedItem) return;
+                
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                
+                if (e.clientY < midY) {
+                    if (item.previousElementSibling !== draggedItem) {
+                        platformList.insertBefore(draggedItem, item);
+                    }
+                } else {
+                    if (item.nextElementSibling !== draggedItem) {
+                        platformList.insertBefore(draggedItem, item.nextElementSibling);
+                    }
+                }
+            });
+        };
         
+        // 初始化现有平台项的拖放事件
+        platformList.querySelectorAll('.platform-item').forEach(addDragEvents);
+        
+        // 监听平台列表的拖放事件
         platformList.addEventListener('dragover', (e) => {
             e.preventDefault();
             const draggingItem = document.querySelector('.dragging');
             if (!draggingItem) return;
             
+            // 如果拖到了列表的末尾
             const afterElement = this.getDragAfterElement(platformList, e.clientY);
-            if (afterElement) {
-                platformList.insertBefore(draggingItem, afterElement);
-            } else {
+            if (!afterElement) {
                 platformList.appendChild(draggingItem);
             }
         });
-
-        platformList.addEventListener('drop', (e) => {
+        
+        platformList.addEventListener('drop', async (e) => {
             e.preventDefault();
-            const draggedPlatformId = e.dataTransfer.getData('text/plain');
-            this.updatePlatformOrder();
+            const draggingItem = document.querySelector('.dragging');
+            if (!draggingItem) return;
+            
+            try {
+                await this.updatePlatformOrder();
+                console.log('平台顺序已更新'); // 添加日志
+            } catch (error) {
+                console.error('更新平台顺序失败:', error);
+                this.showNotification('更新平台顺序失败', 'error');
+            }
         });
     }
 
@@ -563,23 +906,63 @@ class GameTracker {
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-    updatePlatformOrder() {
-        const platformItems = document.querySelectorAll('.platform-item');
-        const newOrder = [];
-        
-        platformItems.forEach(item => {
-            const platformId = item.dataset.platformId;
-            const platform = this.platforms.find(p => p.id === platformId);
-            if (platform) {
-                newOrder.push(platform);
+    async updatePlatformOrder() {
+        try {
+            const platformItems = document.querySelectorAll('.platform-item');
+            const newOrder = [];
+            const seenIds = new Set(); // 用于检查重复ID
+            let order = 0; // 用于记录顺序
+            
+            platformItems.forEach(item => {
+                const platformId = item.dataset.platformId;
+                if (!platformId) {
+                    console.warn('找到没有ID的平台项');
+                    return;
+                }
+                
+                if (seenIds.has(platformId)) {
+                    console.warn(`发现重复的平台ID: ${platformId}`);
+                    return;
+                }
+                
+                const platform = this.platforms.find(p => p.id === platformId);
+                if (platform) {
+                    // 创建平台对象的副本，并添加order属性
+                    newOrder.push({
+                        ...platform,
+                        order: order++
+                    });
+                    seenIds.add(platformId);
+                } else {
+                    console.warn(`找不到ID为 ${platformId} 的平台`);
+                }
+            });
+            
+            // 确保所有平台都被包含
+            if (newOrder.length !== this.platforms.length) {
+                console.warn(`平台数量不匹配: 新=${newOrder.length}, 原=${this.platforms.length}`);
+                throw new Error('平台数量不匹配');
             }
-        });
-        
-        this.platforms = newOrder;
-        this.savePlatforms();
-        this.updatePlatformOptions();
-        this.renderGames();
-        this.showNotification('平台顺序已更新！', 'success');
+            
+            console.log('更新前的平台顺序:', this.platforms.map(p => ({id: p.id, order: p.order})));
+            console.log('更新后的平台顺序:', newOrder.map(p => ({id: p.id, order: p.order})));
+            
+            this.platforms = newOrder;
+            await this.savePlatforms();
+            this.updatePlatformOptions();
+            await this.renderGames();
+            
+            this.showNotification('平台顺序已更新！', 'success');
+        } catch (error) {
+            console.error('更新平台顺序失败:', error);
+            this.showNotification('更新平台顺序失败', 'error');
+            
+            // 重新加载数据以恢复状态
+            await this.loadData();
+            this.renderPlatformList();
+            this.updatePlatformOptions();
+            await this.renderGames();
+        }
     }
 
     createPlatformItem(platform) {
@@ -593,11 +976,11 @@ class GameTracker {
                     <div class="platform-color">${platform.color}</div>
                 </div>
                 <div class="platform-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="gameTracker.editPlatform('${platform.id}')">
-                        <i class="fas fa-edit"></i>
+                    <button class="btn btn-secondary btn-sm" onclick="gameTracker.editPlatform('${platform.id}')" aria-label="编辑平台" title="编辑平台">
+                        <i class="fas fa-edit" aria-hidden="true"></i>
                     </button>
-                    <button class="btn btn-danger btn-sm" onclick="gameTracker.deletePlatform('${platform.id}')">
-                        <i class="fas fa-trash"></i>
+                    <button class="btn btn-danger btn-sm" onclick="gameTracker.deletePlatform('${platform.id}')" aria-label="删除平台" title="删除平台">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
@@ -627,11 +1010,11 @@ class GameTracker {
                     <div class="color-preview" style="background: ${platform.color}"></div>
                 </div>
                 <div class="platform-actions">
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <i class="fas fa-save"></i>
+                    <button type="submit" class="btn btn-primary btn-sm" aria-label="保存平台" title="保存平台">
+                        <i class="fas fa-save" aria-hidden="true"></i>
                     </button>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="gameTracker.cancelEditPlatform('${platformId}')">
-                        <i class="fas fa-times"></i>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="gameTracker.cancelEditPlatform('${platformId}')" aria-label="取消编辑" title="取消编辑">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
             </form>
@@ -701,8 +1084,73 @@ class GameTracker {
         this.editPlatform(newId);
     }
 
-    savePlatforms() {
-        localStorage.setItem('platforms', JSON.stringify(this.platforms));
+    async savePlatforms() {
+        try {
+            console.log('开始保存平台数据:', this.platforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+            
+            // 创建新的事务
+            const transaction = this.db.transaction(['platforms'], 'readwrite');
+            const store = transaction.objectStore('platforms');
+            
+            // 清空现有数据
+            const clearRequest = store.clear();
+            await new Promise((resolve, reject) => {
+                clearRequest.onsuccess = () => {
+                    console.log('清空平台数据成功');
+                    resolve();
+                };
+                clearRequest.onerror = () => {
+                    console.error('清空平台数据失败:', clearRequest.error);
+                    reject(clearRequest.error);
+                };
+            });
+            
+            // 保存所有平台数据
+            for (let i = 0; i < this.platforms.length; i++) {
+                const platform = this.platforms[i];
+                const platformToSave = {
+                    ...platform,
+                    order: i // 确保order属性正确
+                };
+                
+                const putRequest = store.put(platformToSave);
+                await new Promise((resolve, reject) => {
+                    putRequest.onsuccess = () => {
+                        console.log(`保存平台 ${platform.name} 成功，order: ${i}`);
+                        resolve();
+                    };
+                    putRequest.onerror = () => {
+                        console.error(`保存平台 ${platform.name} 失败:`, putRequest.error);
+                        reject(putRequest.error);
+                    };
+                });
+            }
+            
+            // 等待事务完成
+            await new Promise((resolve, reject) => {
+                transaction.oncomplete = () => {
+                    console.log('平台数据保存事务完成');
+                    resolve();
+                };
+                transaction.onerror = () => {
+                    console.error('平台数据保存事务失败:', transaction.error);
+                    reject(transaction.error);
+                };
+                transaction.onabort = () => {
+                    console.error('平台数据保存事务被中止');
+                    reject(new Error('Transaction aborted'));
+                };
+            });
+            
+            // 验证保存结果
+            const savedPlatforms = await this.getAllFromStore('platforms');
+            console.log('验证保存结果:', savedPlatforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+            
+        } catch (error) {
+            console.error('保存平台数据失败:', error);
+            this.showNotification('保存平台数据失败', 'error');
+            throw error;
+        }
     }
 
     updatePlatformOptions() {
