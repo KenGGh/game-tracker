@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>游戏记录系统</title>
+    <title>我的游戏记录</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1><i class="fas fa-gamepad"></i> 坑仔的游戏记录</h1>
+            <h1><i class="fas fa-gamepad"></i> 我的游戏记录</h1>
             <p>-今年肝了多少游戏？-</p>
             <button class="btn btn-add" onclick="gameTracker.openModal()" aria-label="添加新游戏" title="添加新游戏">
                 <i class="fas fa-plus" aria-hidden="true"></i>
@@ -43,7 +43,7 @@
                             </select>
                         </div>
                         <div class="data-controls">
-                            <button class="btn btn-secondary btn-sm" onclick="gameTracker.exportData()" aria-label="导出数据" title="导出数据">
+                            <button class="btn btn-secondary btn-sm" onclick="gameTracker.exportData().catch(console.error)" aria-label="导出数据" title="导出数据">
                                 <i class="fas fa-download" aria-hidden="true"></i> 导出数据
                             </button>
                             <button class="btn btn-secondary btn-sm" onclick="gameTracker.importData()" aria-label="导入数据" title="导入数据">
@@ -76,8 +76,8 @@
                             <input type="text" id="gameName" required>
                         </div>
                         <div class="form-group">
-                            <label for="gameOriginalName">游戏原名</label>
-                            <input type="text" id="gameOriginalName" placeholder="可选：填写游戏的原始名称">
+                            <label for="gameOriginalName">外文名</label>
+                            <input type="text" id="gameOriginalName" placeholder="可选：填写游戏的外文名称">
                         </div>
                     </div>
                                          <div class="form-row">
@@ -94,16 +94,39 @@
                          </div>
                      </div>
                      <div class="form-row">
-                         <div class="form-group">
-                             <label for="gameMetacriticScore">Metacritic评分</label>
-                             <div class="metacritic-container">
-                                 <input type="number" id="gameMetacriticScore" min="0" max="100" placeholder="0-100">
-                                                                 <button type="button" class="btn btn-secondary btn-sm" id="fetchMetacriticBtn" aria-label="快速跳转到Metacritic搜索" title="快速跳转到Metacritic搜索">
-                                    <i class="fas fa-external-link-alt" aria-hidden="true"></i> 快速跳转
-                                </button>
-                             </div>
-                             <small class="form-help">可选：手动输入或快速跳转到Metacritic搜索</small>
-                         </div>
+                                                 <div class="form-group">
+                            <label for="gameRating">喜爱度</label>
+                            <div class="rating-container">
+                                <div class="heart-rating">
+                                    <input type="radio" id="heart10" name="rating" value="10">
+                                    <label for="heart10"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart9" name="rating" value="9">
+                                    <label for="heart9"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart8" name="rating" value="8">
+                                    <label for="heart8"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart7" name="rating" value="7">
+                                    <label for="heart7"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart6" name="rating" value="6">
+                                    <label for="heart6"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart5" name="rating" value="5">
+                                    <label for="heart5"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart4" name="rating" value="4">
+                                    <label for="heart4"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart3" name="rating" value="3">
+                                    <label for="heart3"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart2" name="rating" value="2">
+                                    <label for="heart2"><i class="fas fa-heart"></i></label>
+                                    <input type="radio" id="heart1" name="rating" value="1">
+                                    <label for="heart1"><i class="fas fa-heart"></i></label>
+                                </div>
+                            </div>
+                            <small class="form-help">可选：点击爱心进行喜爱度评分（1-10分）</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="gameComment">一句话评论</label>
+                            <input type="text" id="gameComment" placeholder="可选：简短评价游戏体验" maxlength="20">
+                            <small class="form-help">可选：不超过20个字的简短评论</small>
+                        </div>
                      </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -172,6 +195,17 @@
                     <button class="btn btn-primary" onclick="gameTracker.addNewPlatform()" aria-label="添加新平台" title="添加新平台">
                         <i class="fas fa-plus" aria-hidden="true"></i> 添加平台
                     </button>
+                </div>
+                <div class="settings-section">
+                    <h3><i class="fas fa-trash"></i> 数据管理</h3>
+                    <div class="form-group">
+                        <p style="margin-bottom: 15px; color: #718096; font-size: 0.9rem;">
+                            清理所有数据将删除所有游戏记录、平台设置和图片数据，此操作不可撤销。
+                        </p>
+                        <button class="btn btn-danger" onclick="gameTracker.clearAllData()" aria-label="清理所有数据" title="清理所有数据">
+                            <i class="fas fa-trash-alt" aria-hidden="true"></i> 清理所有数据
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

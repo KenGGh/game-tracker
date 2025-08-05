@@ -27,16 +27,11 @@ class GameTracker {
 
             request.onsuccess = (event) => {
                 this.db = event.target.result;
-                console.log('数据库连接成功');
                 resolve();
             };
 
             request.onupgradeneeded = (event) => {
-                console.log('数据库升级中...');
                 const db = event.target.result;
-                const oldVersion = event.oldVersion;
-                const newVersion = event.newVersion;
-                console.log(`数据库版本从 ${oldVersion} 升级到 ${newVersion}`);
                 
                 // 如果存在旧的存储对象，先删除它们
                 if (db.objectStoreNames.contains('platforms')) {
@@ -59,8 +54,6 @@ class GameTracker {
                 
                 // 创建图片数据存储
                 db.createObjectStore('images', { keyPath: 'id' });
-                
-                console.log('数据库结构升级完成');
             };
         });
     }
@@ -86,7 +79,7 @@ class GameTracker {
                     const orderB = typeof b.order === 'number' ? b.order : 999;
                     return orderA - orderB;
                 });
-                console.log('加载的平台数据（已排序）:', this.platforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+
             }
         } catch (error) {
             console.error('加载数据失败:', error);
@@ -110,7 +103,6 @@ class GameTracker {
             request.onsuccess = async () => {
                 try {
                     await transactionComplete;
-                    console.log(`从 ${storeName} 加载数据:`, request.result); // 添加日志
                     resolve(request.result);
                 } catch (error) {
                     console.error(`从 ${storeName} 加载数据失败:`, error);
@@ -127,13 +119,14 @@ class GameTracker {
 
     getDefaultPlatforms() {
         return [
-            { id: 'pc', name: 'PC', color: '#667eea', icon: 'fas fa-desktop' },
-            { id: 'ps5', name: 'PS5', color: '#667eea', icon: 'fas fa-gamepad' },
-            { id: 'ps4', name: 'PS4', color: '#667eea', icon: 'fas fa-gamepad' },
-            { id: 'xbox', name: 'Xbox Series X', color: '#107c10', icon: 'fas fa-gamepad' },
-            { id: 'switch', name: 'Nintendo Switch', color: '#e60012', icon: 'fas fa-gamepad' },
-            { id: 'mobile', name: '手机', color: '#ff6b6b', icon: 'fas fa-mobile-alt' },
-            { id: 'other', name: '其他', color: '#718096', icon: 'fas fa-question' }
+            { id: 'steam', name: 'Steam', color: '#033d62' },
+            { id: 'ps5', name: 'PS5', color: '#0344b5' },
+            { id: 'ps4', name: 'PS4', color: '#0344b5' },
+            { id: 'switch2', name: 'Nintendo Switch 2', color: '#e70013' },
+            { id: 'switch', name: 'Nintendo Switch', color: '#e70013' },
+            { id: 'xbox', name: 'Xbox', color: '#0f7c0f' }
+
+
         ];
     }
 
@@ -181,9 +174,26 @@ class GameTracker {
         // 文件上传事件
         document.getElementById('gameCover').addEventListener('change', (e) => this.handleFileUpload(e));
         document.getElementById('removeCover').addEventListener('click', () => this.removeCover());
+        
+        // 添加评论字符计数功能
+        const gameCommentInput = document.getElementById('gameComment');
+        gameCommentInput.addEventListener('input', (e) => {
+            const length = e.target.value.length;
+            const maxLength = 20;
+            const remaining = maxLength - length;
+            
+            // 更新帮助文本
+            const helpText = e.target.parentNode.querySelector('.form-help');
+            if (helpText) {
+                if (remaining >= 0) {
+                    helpText.textContent = `可选：不超过20个字的简短评论（还可输入${remaining}个字符）`;
+                } else {
+                    helpText.textContent = `可选：不超过20个字的简短评论（超出${Math.abs(remaining)}个字符）`;
+                }
+            }
+        });
 
-        // Metacritic评分获取事件
-        document.getElementById('fetchMetacriticBtn').addEventListener('click', () => this.fetchMetacriticScore());
+
 
         // 通关日期输入验证
         document.getElementById('gameCompletionDate').addEventListener('input', (e) => {
@@ -260,7 +270,14 @@ class GameTracker {
         document.getElementById('gameOriginalName').value = game.originalName || '';
         document.getElementById('gamePlatform').value = game.platform || '';
         document.getElementById('gameCompletionDate').value = game.completionDate || '';
-        document.getElementById('gameMetacriticScore').value = game.metacriticScore || '';
+        // 设置喜爱度评分
+        if (game.rating) {
+            document.querySelector(`input[name="rating"][value="${game.rating}"]`).checked = true;
+        } else {
+            // 清除所有爱心选择
+            document.querySelectorAll('input[name="rating"]').forEach(input => input.checked = false);
+        }
+        document.getElementById('gameComment').value = game.comment || '';
 
         // 处理封面图片预览
         let coverSrc = null;
@@ -374,7 +391,8 @@ class GameTracker {
         const gameOriginalName = document.getElementById('gameOriginalName').value.trim();
         const gamePlatform = document.getElementById('gamePlatform').value;
         const gameCompletionDate = document.getElementById('gameCompletionDate').value;
-        const gameMetacriticScore = document.getElementById('gameMetacriticScore').value;
+        const gameRating = document.querySelector('input[name="rating"]:checked')?.value || null;
+        const gameComment = document.getElementById('gameComment').value.trim();
         const gameCoverFile = document.getElementById('gameCover').files[0];
 
         if (!gameName) {
@@ -382,9 +400,15 @@ class GameTracker {
             return;
         }
 
+        // 验证评论长度（不超过20个中文字）
+        if (gameComment && gameComment.length > 20) {
+            alert('评论不能超过20个字符！');
+            return;
+        }
+
         if (this.currentEditingGameId) {
             // 编辑模式
-            this.updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, gameCoverFile);
+            this.updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameCoverFile);
         } else {
             // 添加模式
             let coverData = null;
@@ -392,16 +416,16 @@ class GameTracker {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     coverData = e.target.result;
-                    this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData);
+                    this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
                 };
                 reader.readAsDataURL(gameCoverFile);
             } else {
-                this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, null);
+                this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, null);
             }
         }
     }
 
-    updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, gameCoverFile) {
+    updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameCoverFile) {
         const gameIndex = this.games.findIndex(g => g.id === this.currentEditingGameId);
         if (gameIndex === -1) return;
 
@@ -409,19 +433,19 @@ class GameTracker {
         
         // 处理封面图片
         let coverData = game.cover; // 保持原有封面
-        if (gameCoverFile) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                coverData = e.target.result;
-                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData);
-            };
-            reader.readAsDataURL(gameCoverFile);
-        } else {
-            this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData);
-        }
+                    if (gameCoverFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    coverData = e.target.result;
+                    this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
+                };
+                reader.readAsDataURL(gameCoverFile);
+            } else {
+                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
+            }
     }
 
-    async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameMetacriticScore, coverData) {
+    async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData) {
         try {
             const game = this.games[gameIndex];
             let imageId = game.imageId;
@@ -440,7 +464,8 @@ class GameTracker {
                 originalName: gameOriginalName,
                 platform: gamePlatform,
                 completionDate: gameCompletionDate || null,
-                metacriticScore: gameMetacriticScore || null,
+                rating: gameRating ? parseInt(gameRating) : null,
+                comment: gameComment || null,
                 imageId: imageId
             };
 
@@ -455,7 +480,7 @@ class GameTracker {
         }
     }
 
-    async saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameMetacriticScore, coverData) {
+    async saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameRating, gameComment, coverData) {
         const gameId = Date.now();
         let imageId = null;
 
@@ -471,7 +496,8 @@ class GameTracker {
                 originalName: gameOriginalName,
                 platform: gamePlatform,
                 completionDate: completionDate || null,
-                metacriticScore: gameMetacriticScore || null,
+                rating: gameRating ? parseInt(gameRating) : null,
+                comment: gameComment || null,
                 imageId: imageId,
                 addedAt: new Date().toISOString()
             };
@@ -492,6 +518,9 @@ class GameTracker {
         document.getElementById('addGameForm').reset();
         document.getElementById('coverPreview').style.display = 'none';
         document.getElementById('previewImage').src = '';
+        
+        // 清除喜爱度评分
+        document.querySelectorAll('input[name="rating"]').forEach(input => input.checked = false);
         
         // 只在添加模式下设置今天的日期
         if (!this.currentEditingGameId) {
@@ -732,20 +761,22 @@ class GameTracker {
                     <div class="game-title">${this.escapeHtml(game.name)}</div>
                     ${game.originalName ? `<div class="game-original-name">${this.escapeHtml(game.originalName)}</div>` : ''}
                     
-                                         <div class="game-meta">
-                         ${game.completionDate ? `
-                             <div class="game-completion-date">
-                                 <i class="fas fa-calendar-check"></i>
-                                 <span>通关日期：${new Date(game.completionDate).toLocaleDateString('zh-CN')}</span>
-                             </div>
-                         ` : ''}
-                         ${game.metacriticScore ? `
-                             <div class="game-metacritic-score">
-                                 <i class="fas fa-star"></i>
-                                 <span>Metacritic: ${game.metacriticScore}</span>
-                             </div>
-                         ` : ''}
-                     </div>
+                    <div class="game-meta">
+                        ${game.completionDate ? `
+                            <div class="game-completion-date">
+                                <i class="fas fa-calendar-check"></i>
+                                <span>通关日期：${new Date(game.completionDate).toLocaleDateString('zh-CN')}</span>
+                            </div>
+                        ` : ''}
+                        ${game.rating ? `
+                            <div class="game-rating">
+                                <i class="fas fa-heart"></i>
+                                <span>喜爱度: ${'❤️'.repeat(game.rating)}${'🤍'.repeat(10-game.rating)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${game.comment ? `<div class="game-comment">${this.escapeHtml(game.comment)}</div>` : ''}
                 </div>
             </div>
         `;
@@ -796,40 +827,7 @@ class GameTracker {
         return div.innerHTML;
     }
 
-    async fetchMetacriticScore() {
-        const gameOriginalName = document.getElementById('gameOriginalName').value.trim();
-        const gameName = document.getElementById('gameName').value.trim();
-        
-        // 优先使用原名，如果没有原名则使用游戏名称
-        const searchTerm = gameOriginalName || gameName;
-        
-        if (!searchTerm) {
-            this.showNotification('请先输入游戏名称或外文名！', 'error');
-            return;
-        }
 
-        const fetchBtn = document.getElementById('fetchMetacriticBtn');
-        const originalText = fetchBtn.innerHTML;
-        fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 搜索中...';
-        fetchBtn.disabled = true;
-
-        try {
-            // 由于CORS限制，我们提供一个搜索链接供用户手动查看
-            const searchUrl = `https://www.metacritic.com/search/${encodeURIComponent(searchTerm)}`;
-            
-            // 打开新窗口让用户查看Metacritic评分
-            window.open(searchUrl, '_blank');
-            
-            this.showNotification('已打开Metacritic搜索页面，请手动查看评分', 'info');
-            
-        } catch (error) {
-            console.error('打开Metacritic搜索失败:', error);
-            this.showNotification('无法打开Metacritic搜索页面', 'error');
-        } finally {
-            fetchBtn.innerHTML = originalText;
-            fetchBtn.disabled = false;
-        }
-    }
 
     openSettingsModal() {
         document.getElementById('settingsModal').classList.add('show');
@@ -908,7 +906,7 @@ class GameTracker {
             
             try {
                 await this.updatePlatformOrder();
-                console.log('平台顺序已更新'); // 添加日志
+
             } catch (error) {
                 console.error('更新平台顺序失败:', error);
                 this.showNotification('更新平台顺序失败', 'error');
@@ -969,8 +967,7 @@ class GameTracker {
                 throw new Error('平台数量不匹配');
             }
             
-            console.log('更新前的平台顺序:', this.platforms.map(p => ({id: p.id, order: p.order})));
-            console.log('更新后的平台顺序:', newOrder.map(p => ({id: p.id, order: p.order})));
+
             
             this.platforms = newOrder;
             await this.savePlatforms();
@@ -994,7 +991,7 @@ class GameTracker {
         return `
             <div class="platform-item" data-platform-id="${platform.id}">
                 <div class="platform-icon" style="background: ${platform.color}">
-                    <i class="${platform.icon}"></i>
+                    <i class="fas fa-gamepad"></i>
                 </div>
                 <div class="platform-info">
                     <div class="platform-name">${this.escapeHtml(platform.name)}</div>
@@ -1022,7 +1019,7 @@ class GameTracker {
         
         platformItem.innerHTML = `
             <div class="platform-icon" style="background: ${platform.color}">
-                <i class="${platform.icon}"></i>
+                <i class="fas fa-gamepad"></i>
             </div>
             <form class="platform-form" onsubmit="gameTracker.savePlatform('${platformId}', event)">
                 <div class="form-group">
@@ -1099,7 +1096,7 @@ class GameTracker {
             id: newId,
             name: '新平台',
             color: '#667eea',
-            icon: 'fas fa-gamepad'
+
         };
 
         this.platforms.push(newPlatform);
@@ -1111,7 +1108,7 @@ class GameTracker {
 
     async savePlatforms() {
         try {
-            console.log('开始保存平台数据:', this.platforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+
             
             // 创建新的事务
             const transaction = this.db.transaction(['platforms'], 'readwrite');
@@ -1121,7 +1118,6 @@ class GameTracker {
             const clearRequest = store.clear();
             await new Promise((resolve, reject) => {
                 clearRequest.onsuccess = () => {
-                    console.log('清空平台数据成功');
                     resolve();
                 };
                 clearRequest.onerror = () => {
@@ -1141,7 +1137,6 @@ class GameTracker {
                 const putRequest = store.put(platformToSave);
                 await new Promise((resolve, reject) => {
                     putRequest.onsuccess = () => {
-                        console.log(`保存平台 ${platform.name} 成功，order: ${i}`);
                         resolve();
                     };
                     putRequest.onerror = () => {
@@ -1154,7 +1149,6 @@ class GameTracker {
             // 等待事务完成
             await new Promise((resolve, reject) => {
                 transaction.oncomplete = () => {
-                    console.log('平台数据保存事务完成');
                     resolve();
                 };
                 transaction.onerror = () => {
@@ -1167,9 +1161,7 @@ class GameTracker {
                 };
             });
             
-            // 验证保存结果
-            const savedPlatforms = await this.getAllFromStore('platforms');
-            console.log('验证保存结果:', savedPlatforms.map(p => ({id: p.id, name: p.name, order: p.order})));
+
             
         } catch (error) {
             console.error('保存平台数据失败:', error);
@@ -1238,28 +1230,53 @@ class GameTracker {
         });
     }
 
-    exportData() {
-        const data = {
-            games: this.games,
-            platforms: this.platforms,
-            sortBy: this.sortBy,
-            sortOrder: this.sortOrder,
-            exportDate: new Date().toISOString()
-        };
-        
-        const dataStr = JSON.stringify(data, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const url = URL.createObjectURL(dataBlob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `game-tracker-data-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        this.showNotification('数据导出成功！', 'success');
+    async exportData() {
+        try {
+            // 准备游戏数据，包含图片数据
+            const gamesWithImages = [];
+            for (const game of this.games) {
+                const gameData = { ...game };
+                
+                // 如果有imageId，获取对应的图片数据
+                if (game.imageId) {
+                    try {
+                        const imageData = await this.getImage(game.imageId);
+                        if (imageData) {
+                            gameData.cover = imageData; // 添加cover字段包含图片数据
+                        }
+                    } catch (error) {
+                        console.error(`获取游戏 ${game.name} 的图片失败:`, error);
+                    }
+                }
+                
+                gamesWithImages.push(gameData);
+            }
+            
+            const data = {
+                games: gamesWithImages,
+                platforms: this.platforms,
+                sortBy: this.sortBy,
+                sortOrder: this.sortOrder,
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `game-tracker-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            this.showNotification('数据导出成功！', 'success');
+        } catch (error) {
+            console.error('导出数据失败:', error);
+            this.showNotification('导出数据失败', 'error');
+        }
     }
 
     importData() {
@@ -1277,20 +1294,20 @@ class GameTracker {
                     
                     // 处理游戏数据，转换旧格式的封面
                     if (data.games && Array.isArray(data.games)) {
-                        console.log('开始处理游戏数据...');
+
                         const processedGames = [];
                         
                         for (const game of data.games) {
                             const processedGame = { ...game };
                             
-                            // 如果游戏有旧格式的cover字段，转换为新格式
+                            // 如果游戏有cover字段（来自新的导出格式或旧格式），转换为新格式
                             if (game.cover && !game.imageId) {
                                 try {
                                     const imageId = `game_${game.id}_cover`;
                                     await this.saveImage(imageId, game.cover);
                                     processedGame.imageId = imageId;
-                                    delete processedGame.cover; // 删除旧的cover字段
-                                    console.log(`转换游戏 ${game.name} 的封面成功`);
+                                    delete processedGame.cover; // 删除cover字段，使用imageId
+
                                 } catch (error) {
                                     console.error(`转换游戏 ${game.name} 的封面失败:`, error);
                                     // 如果转换失败，保留原有的cover字段作为备用
@@ -1302,18 +1319,21 @@ class GameTracker {
                         
                         this.games = processedGames;
                         await this.saveGames();
-                        console.log('游戏数据处理完成');
+
                     }
                     
                     // 处理平台数据
                     if (data.platforms && Array.isArray(data.platforms)) {
-                        // 为旧平台数据添加order属性
-                        this.platforms = data.platforms.map((platform, index) => ({
-                            ...platform,
-                            order: platform.order !== undefined ? platform.order : index
-                        }));
+                        // 为旧平台数据添加order属性，并删除icon字段
+                        this.platforms = data.platforms.map((platform, index) => {
+                            const { icon, ...platformWithoutIcon } = platform;
+                            return {
+                                ...platformWithoutIcon,
+                                order: platform.order !== undefined ? platform.order : index
+                            };
+                        });
                         await this.savePlatforms();
-                        console.log('平台数据处理完成');
+
                     }
                     
                     if (data.sortBy) {
@@ -1330,15 +1350,64 @@ class GameTracker {
                     await this.renderGames();
                     this.initSortControls();
                     
-                    this.showNotification('数据导入成功！', 'success');
-                } catch (error) {
-                    console.error('导入数据失败:', error);
-                    this.showNotification('导入失败：文件格式不正确', 'error');
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
+                                this.showNotification('数据导入成功！', 'success');
+        } catch (error) {
+            console.error('导入数据失败:', error);
+            this.showNotification('导入失败：文件格式不正确', 'error');
+        }
+    };
+    reader.readAsText(file);
+};
+input.click();
+}
+
+    async clearAllData() {
+        if (!confirm('确定要清理所有数据吗？\n\n这将删除：\n• 所有游戏记录\n• 所有平台设置\n• 所有图片数据\n\n此操作不可撤销！')) {
+            return;
+        }
+        
+        try {
+            // 清空游戏数据
+            this.games = [];
+            await this.saveGames();
+            
+            // 清空平台数据，恢复默认平台
+            this.platforms = this.getDefaultPlatforms();
+            await this.savePlatforms();
+            
+            // 清空图片数据
+            const transaction = this.db.transaction('images', 'readwrite');
+            const store = transaction.objectStore('images');
+            await new Promise((resolve, reject) => {
+                const clearRequest = store.clear();
+                clearRequest.onsuccess = () => resolve();
+                clearRequest.onerror = () => reject(clearRequest.error);
+            });
+            
+            // 重置排序设置
+            this.sortBy = 'addedAt';
+            this.sortOrder = 'desc';
+            localStorage.setItem('sortBy', this.sortBy);
+            localStorage.setItem('sortOrder', this.sortOrder);
+            
+            // 重置标题设置
+            this.mainTitle = '今年又肝了多少游戏';
+            this.subTitle = '年度通关游戏记录';
+            localStorage.setItem('mainTitle', this.mainTitle);
+            localStorage.setItem('subTitle', this.subTitle);
+            
+            // 更新界面
+            this.updatePlatformOptions();
+            await this.renderGames();
+            this.updateTitles();
+            this.initSortControls();
+            this.closeSettingsModal();
+            
+            this.showNotification('所有数据已清理完成！', 'success');
+        } catch (error) {
+            console.error('清理数据失败:', error);
+            this.showNotification('清理数据失败', 'error');
+        }
     }
 }
 
