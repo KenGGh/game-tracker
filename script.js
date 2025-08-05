@@ -1214,9 +1214,9 @@ class GameTracker {
                             aValue = (a.name || '').toLowerCase();
                             bValue = (b.name || '').toLowerCase();
                             break;
-                        case 'metacriticScore':
-                            aValue = a.metacriticScore ? parseInt(a.metacriticScore) : 0;
-                            bValue = b.metacriticScore ? parseInt(b.metacriticScore) : 0;
+                        case 'rating':
+                            aValue = a.rating ? parseInt(a.rating) : 0;
+                            bValue = b.rating ? parseInt(b.rating) : 0;
                             break;
                         default:
                             return 0;
