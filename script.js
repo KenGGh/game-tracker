@@ -674,11 +674,14 @@ class GameTracker {
             const gameCards = await Promise.all(yearGames.map(game => this.createGameCard(game)));
             
             html += `
-                <div class="year-section">
+                <div class="year-section" data-year="${year}">
                     <div class="year-title">
                         <i class="fas fa-calendar"></i>
                         <span>${year}年通关游戏</span>
                         <span class="game-count">${yearGames.length}个</span>
+                        <button class="btn btn-secondary btn-sm" onclick="gameTracker.exportYearImage(${year})" aria-label="导出年份截图" title="导出年份截图" style="margin-left:12px;">
+                            <i class="fas fa-image" aria-hidden="true"></i> 导出截图
+                        </button>
                     </div>
                     <div class="year-chart">
                         <canvas id="monthlyChart-${year}" aria-label="${year} 每月通关柱状图" role="img"></canvas>
@@ -763,6 +766,56 @@ class GameTracker {
             btn.innerHTML = '<i class="fas fa-chart-column" aria-hidden="true"></i> 收起柱状图';
             btn.setAttribute('aria-label', '收起柱状图');
             btn.setAttribute('title', '收起柱状图');
+        }
+    }
+
+    async exportYearImage(year) {
+        try {
+            const section = document.querySelector(`.year-section[data-year="${year}"]`);
+            if (!section) {
+                this.showNotification('未找到对应年份区域', 'error');
+                return;
+            }
+            // 等待浏览器渲染
+            await new Promise(r => setTimeout(r, 100));
+            const canvasImage = await html2canvas(section, {
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                scale: 2,
+                onclone: (clonedDoc) => {
+                    try {
+                        const clonedSection = clonedDoc.querySelector(`.year-section[data-year="${year}"]`);
+                        if (!clonedSection) return;
+                        const headers = clonedSection.querySelectorAll('.game-card-header');
+                        headers.forEach(header => {
+                            const img = header.querySelector('img.game-cover');
+                            if (!img || !img.getAttribute('src')) return;
+                            const src = img.getAttribute('src');
+                            header.style.backgroundImage = `url('${src}')`;
+                            header.style.backgroundSize = 'cover';
+                            header.style.backgroundPosition = 'center 35px';
+                            header.style.backgroundRepeat = 'no-repeat';
+                            // 隐藏原图，避免 html2canvas 对 object-fit 处理不一致
+                            img.style.visibility = 'hidden';
+                        });
+                    } catch (e) {
+                        // 忽略克隆期间的非致命错误
+                        console.warn('onclone 处理封面时出错:', e);
+                    }
+                }
+            });
+            const dataUrl = canvasImage.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `game-tracker-${year}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            this.showNotification('截图已导出！', 'success');
+        } catch (e) {
+            console.error('导出截图失败:', e);
+            this.showNotification('导出截图失败', 'error');
         }
     }
 
