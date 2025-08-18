@@ -9,6 +9,8 @@ class GameTracker {
         this.dbName = 'gameTrackerDB';
         this.dbVersion = 2; // 增加版本号以触发数据库升级
         this.db = null;
+        this.monthlyCharts = {};
+        this.chartsCollapsed = JSON.parse(localStorage.getItem('chartsCollapsed') || 'false');
         this.initDB().then(() => {
             this.loadData().then(() => {
                 this.init();
@@ -137,6 +139,7 @@ class GameTracker {
         this.initSortControls();
         this.updateTitles();
         this.initTitleInputs();
+        this.updateToggleChartsButton();
     }
 
     updateTitles() {
@@ -677,6 +680,9 @@ class GameTracker {
                         <span>${year}年通关游戏</span>
                         <span class="game-count">${yearGames.length}个</span>
                     </div>
+                    <div class="year-chart">
+                        <canvas id="monthlyChart-${year}" aria-label="${year} 每月通关柱状图" role="img"></canvas>
+                    </div>
                     <div class="games-grid">
                         ${gameCards.join('')}
                         <div class="add-game-card" onclick="gameTracker.openModal()" role="button" tabindex="0" aria-label="添加新游戏" title="添加新游戏">
@@ -715,6 +721,275 @@ class GameTracker {
         }
 
         gamesList.innerHTML = html;
+
+        // 渲染每年每月通关数量柱状图
+        try {
+            for (const year of sortedYears) {
+                const canvas = document.getElementById(`monthlyChart-${year}`);
+                const container = canvas ? canvas.parentElement : null;
+                if (!canvas || !container) continue;
+                if (this.monthlyCharts[year]) {
+                    try { this.monthlyCharts[year].destroy(); } catch (e) {}
+                    this.monthlyCharts[year] = null;
+                }
+                if (this.chartsCollapsed) {
+                    container.style.display = 'none';
+                } else {
+                    container.style.display = '';
+                    this.monthlyCharts[year] = this.createMonthlyChart(canvas, gamesByYear[year], year);
+                }
+            }
+        } catch (e) {
+            console.error('渲染柱状图失败:', e);
+        }
+    }
+
+    toggleCharts() {
+        this.chartsCollapsed = !this.chartsCollapsed;
+        localStorage.setItem('chartsCollapsed', JSON.stringify(this.chartsCollapsed));
+        this.updateToggleChartsButton();
+        // 重新渲染以应用显示/隐藏
+        this.renderGames();
+    }
+
+    updateToggleChartsButton() {
+        const btn = document.getElementById('toggleChartsBtn');
+        if (!btn) return;
+        if (this.chartsCollapsed) {
+            btn.innerHTML = '<i class="fas fa-chart-column" aria-hidden="true"></i> 展开柱状图';
+            btn.setAttribute('aria-label', '展开柱状图');
+            btn.setAttribute('title', '展开柱状图');
+        } else {
+            btn.innerHTML = '<i class="fas fa-chart-column" aria-hidden="true"></i> 收起柱状图';
+            btn.setAttribute('aria-label', '收起柱状图');
+            btn.setAttribute('title', '收起柱状图');
+        }
+    }
+
+    createMonthlyChart(canvasEl, yearGames, year) {
+        const labels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+        const ctx = canvasEl.getContext('2d');
+        const gridColor = 'rgba(0,0,0,0.05)';
+        const tickColor = '#718096';
+        const palette = ['#667eea', '#764ba2', '#34d399', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#10b981', '#f472b6', '#fb923c'];
+        const monthCounts = new Array(12).fill(0);
+
+        // 为每个游戏生成一个数据集，在其月份位置为1，实现堆叠
+        const datasets = [];
+        const games = yearGames.filter(g => g && g.completionDate && g.name);
+        for (let i = 0; i < games.length; i++) {
+            const game = games[i];
+            const month = new Date(game.completionDate).getMonth();
+            if (month < 0 || month > 11) continue;
+            const data = new Array(12).fill(null);
+            data[month] = 1;
+            monthCounts[month]++;
+            const platformClass = this.getPlatformClass(game.platform);
+            const platform = this.platforms.find(p => p.id === platformClass);
+            const color = platform && platform.color ? platform.color : palette[i % palette.length];
+            datasets.push({
+                label: String(game.name),
+                data,
+                // 由自定义插件绘制填充与描边，这里设为透明避免默认方角绘制
+                backgroundColor: 'rgba(0,0,0,0)',
+                borderColor: '#ffffff',
+                borderWidth: 0,
+                stack: 'stack1',
+                // 记录实际颜色供插件使用
+                cellColor: color,
+                maxBarThickness: 200,
+                barThickness: 128,
+                barPercentage: 1,
+                categoryPercentage: 1,
+                completionDate: game.completionDate
+            });
+        }
+
+        // 固定单格高度，动态计算画布高度
+        const maxCount = Math.max(0, ...monthCounts);
+        const cellHeight =64; // 每个游戏格子的像素高度
+        const verticalPadding = 24; // 上下绘图区内边距之和
+        const xAxisReserve = 36; // 预留给 X 轴刻度/标签
+        const chartHeight = Math.max(120, maxCount * cellHeight + verticalPadding + xAxisReserve);
+        // 设置容器与画布高度，保证响应式不覆盖实际显示高度
+        const container = canvasEl.parentElement;
+        if (container && container.classList && container.classList.contains('year-chart')) {
+            container.style.height = chartHeight + 'px';
+        }
+        canvasEl.style.height = chartHeight + 'px';
+        // 同步绘图缓冲区高度以获得清晰渲染
+        canvasEl.height = chartHeight;
+
+        const roundedCellPlugin = {
+            id: 'roundedCellPlugin',
+            beforeDatasetsDraw(chart) {
+                const { ctx } = chart;
+                ctx.save();
+                chart.data.datasets.forEach((ds, dsi) => {
+                    const meta = chart.getDatasetMeta(dsi);
+                    const fillColor = ds.cellColor || ds.backgroundColor || '#667eea';
+                    const strokeColor = ds.borderColor || '#ffffff';
+                    meta.data.forEach((rect, idx) => {
+                        const val = ds.data[idx];
+                        if (!val) return;
+                        const left = rect.x - rect.width / 2;
+                        const right = rect.x + rect.width / 2;
+                        const top = Math.min(rect.y, rect.base);
+                        const bottom = Math.max(rect.y, rect.base);
+                        const width = Math.max(0, right - left);
+                        const height = Math.max(0, bottom - top);
+                        const r = Math.min(12, width / 2, height / 2);
+                        // 绘制圆角矩形
+                        ctx.beginPath();
+                        ctx.moveTo(left + r, top);
+                        ctx.lineTo(right - r, top);
+                        ctx.quadraticCurveTo(right, top, right, top + r);
+                        ctx.lineTo(right, bottom - r);
+                        ctx.quadraticCurveTo(right, bottom, right - r, bottom);
+                        ctx.lineTo(left + r, bottom);
+                        ctx.quadraticCurveTo(left, bottom, left, bottom - r);
+                        ctx.lineTo(left, top + r);
+                        ctx.quadraticCurveTo(left, top, left + r, top);
+                        ctx.closePath();
+                        ctx.fillStyle = fillColor;
+                        ctx.fill();
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = strokeColor;
+                        ctx.stroke();
+                    });
+                });
+                ctx.restore();
+            }
+        };
+
+        const segmentLabelPlugin = {
+            id: 'segmentLabelPlugin',
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                const font = '12px Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+                const lineHeight = 14; // px
+                const padding = 3; // 内边距
+                ctx.save();
+                ctx.font = font;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(0,0,0,0.35)';
+                ctx.shadowBlur = 2;
+                ctx.shadowOffsetY = 1;
+
+                const wrapToLines = (text, maxWidth, maxLines) => {
+                    const measure = (s) => ctx.measureText(s).width;
+                    if (maxWidth <= 2) return [];
+                    const lines = [];
+                    let current = '';
+                    for (const ch of String(text)) {
+                        const next = current + ch;
+                        if (measure(next) <= maxWidth) {
+                            current = next;
+                        } else {
+                            if (current.length > 0) lines.push(current);
+                            current = ch;
+                            if (lines.length >= maxLines) break;
+                        }
+                    }
+                    if (lines.length < maxLines && current.length > 0) lines.push(current);
+                    // 截断超出行数
+                    if (lines.length > maxLines) lines.length = maxLines;
+                    // 若仍有剩余需要标记省略号
+                    const originalWidth = measure(text);
+                    const displayedWidth = lines.reduce((w, line) => w + measure(line), 0);
+                    if (lines.length > 0 && (lines.length === maxLines || displayedWidth < originalWidth)) {
+                        const ellipsis = '…';
+                        let last = lines[lines.length - 1];
+                        while (last.length > 0 && measure(last + ellipsis) > maxWidth) {
+                            last = last.slice(0, -1);
+                        }
+                        if (last.length === 0 && measure(ellipsis) <= maxWidth) {
+                            lines[lines.length - 1] = ellipsis;
+                        } else if (last.length > 0) {
+                            lines[lines.length - 1] = last + ellipsis;
+                        }
+                    }
+                    return lines;
+                };
+
+                chart.data.datasets.forEach((ds, dsi) => {
+                    const meta = chart.getDatasetMeta(dsi);
+                    meta.data.forEach((rect, idx) => {
+                        const val = ds.data[idx];
+                        if (!val) return;
+                        const left = rect.x - rect.width / 2;
+                        const right = rect.x + rect.width / 2;
+                        const top = Math.min(rect.y, rect.base);
+                        const bottom = Math.max(rect.y, rect.base);
+                        const maxTextWidth = Math.max(0, rect.width - padding * 2);
+                        const availableHeight = Math.max(0, (bottom - top) - padding * 2);
+                        const maxLines = Math.floor(availableHeight / lineHeight);
+                        if (maxLines <= 0 || maxTextWidth <= 2) return;
+
+                        const lines = wrapToLines(String(ds.label || ''), maxTextWidth, Math.max(1, maxLines));
+                        if (lines.length === 0) return;
+
+                        const totalHeight = (lines.length - 1) * lineHeight;
+                        const centerY = (top + bottom) / 2;
+                        const startY = centerY - totalHeight / 2;
+                        const centerX = (left + right) / 2;
+                        for (let i = 0; i < lines.length; i++) {
+                            ctx.fillText(lines[i], centerX, startY + i * lineHeight);
+                        }
+                    });
+                });
+                ctx.restore();
+            }
+        };
+
+        return new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 8, right: 8, left: 8, bottom: 0 } },
+                interaction: { mode: 'nearest', intersect: true },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: { color: tickColor }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        suggestedMin: 0,
+                        suggestedMax: Math.max(1, maxCount),
+                        grace: 0,
+                        grid: { color: gridColor },
+                        ticks: { precision: 0, stepSize: 1, color: tickColor }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        displayColors: true,
+                        callbacks: {
+                            title: (items) => {
+                                const ds = items && items[0] ? items[0].dataset : null;
+                                const d = ds && ds.completionDate ? new Date(ds.completionDate) : null;
+                                if (!d) return items && items[0] ? items[0].label : '';
+                                return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                            },
+                            label: (ctx) => String(ctx.dataset?.label || ''),
+                            labelColor: (ctx) => ({
+                                borderColor: '#ffffff',
+                                backgroundColor: ctx.dataset && ctx.dataset.cellColor ? ctx.dataset.cellColor : '#667eea'
+                            })
+                        }
+                    }
+                }
+            },
+            plugins: [roundedCellPlugin, segmentLabelPlugin]
+        });
     }
 
     async createGameCard(game) {

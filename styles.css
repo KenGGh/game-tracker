@@ -687,6 +687,13 @@ body {
     gap: 20px;
 }
 
+/* 年度柱状图容器 */
+.year-chart {
+    width: 100%;
+    /* 高度由脚本按每格高度动态设置 */
+    margin: 10px 0 20px 0;
+}
+
 /* 响应式布局 - 根据屏幕宽度调整每行显示数量 */
 @media (max-width: 1600px) {
     .games-grid {

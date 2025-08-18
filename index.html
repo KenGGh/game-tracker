@@ -49,6 +49,9 @@
                             <button class="btn btn-secondary btn-sm" onclick="gameTracker.importData()" aria-label="导入数据" title="导入数据">
                                 <i class="fas fa-upload" aria-hidden="true"></i> 导入数据
                             </button>
+                            <button class="btn btn-secondary btn-sm" id="toggleChartsBtn" onclick="gameTracker.toggleCharts()" aria-label="展开/收起柱状图" title="展开/收起柱状图">
+                                <i class="fas fa-chart-column" aria-hidden="true"></i> 柱状图
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -211,6 +214,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
-</html> 
+</html>  
