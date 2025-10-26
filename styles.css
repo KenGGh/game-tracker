@@ -807,6 +807,49 @@ body {
     margin-top: 35px;
 }
 
+/* 全成就覆盖徽章（封面右下角） */
+.game-card-header {
+    position: relative; /* 确保覆盖层可定位 */
+}
+.achievement-overlay {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent; /* 只显示图标，无背景 */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    z-index: 20;
+}
+.achievement-overlay i {
+    color: #ffc400; /* 银灰色奖杯 */
+    font-size: 30px;
+    /* 深色描边：优先使用浏览器支持的 text-stroke（webkit），再使用多向 text-shadow 作为降级兼容
+       这样在不支持 text-stroke 的浏览器也能看到明显描边 */
+    text-shadow:
+        -2px -2px 0 #121314,
+        2px -2px 0 #121314,
+        -2px 2px 0 #121314,
+        2px 2px 0 #121314,
+        2px 0px 0 #121314,
+        -2px 0px 0 #121314,
+        0px 2px 0 #121314,
+        0px -2px 0 #121314;
+}
+
+/* 在小屏幕上缩小徽章 */
+@media (max-width: 768px) {
+    .achievement-overlay {
+        width: 36px;
+        height: 36px;
+    }
+    .achievement-overlay i { font-size: 16px; }
+}
+
 .game-card-content {
     padding: 8px 12px 6px 12px;
     flex: 1;
@@ -939,6 +982,8 @@ body {
     color: #e53e3e;
     width: 12px;
 }
+
+/* 旧的 .game-achievement 样式已移除，使用覆盖层 .achievement-overlay 显示在封面右下角 */
 
 @media (max-width: 768px) {
     .container {

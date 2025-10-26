@@ -282,6 +282,13 @@ class GameTracker {
         }
         document.getElementById('gameComment').value = game.comment || '';
 
+        // 全成就字段（兼容旧数据）
+        try {
+            document.getElementById('gameFullAchievements').checked = !!game.fullAchievements;
+        } catch (e) {
+            try { document.getElementById('gameFullAchievements').checked = false; } catch (e) {}
+        }
+
         // 处理封面图片预览
         let coverSrc = null;
         
@@ -396,6 +403,7 @@ class GameTracker {
         const gameCompletionDate = document.getElementById('gameCompletionDate').value;
         const gameRating = document.querySelector('input[name="rating"]:checked')?.value || null;
         const gameComment = document.getElementById('gameComment').value.trim();
+        const gameFullAchievements = document.getElementById('gameFullAchievements')?.checked || false;
         const gameCoverFile = document.getElementById('gameCover').files[0];
 
         if (!gameName) {
@@ -411,7 +419,7 @@ class GameTracker {
 
         if (this.currentEditingGameId) {
             // 编辑模式
-            this.updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameCoverFile);
+            this.updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, gameCoverFile);
         } else {
             // 添加模式
             let coverData = null;
@@ -419,16 +427,16 @@ class GameTracker {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     coverData = e.target.result;
-                    this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
+                    this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
                 };
                 reader.readAsDataURL(gameCoverFile);
             } else {
-                this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, null);
+                this.saveGameWithCover(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, null);
             }
         }
     }
 
-    updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameCoverFile) {
+    updateGame(gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, gameCoverFile) {
         const gameIndex = this.games.findIndex(g => g.id === this.currentEditingGameId);
         if (gameIndex === -1) return;
 
@@ -440,15 +448,15 @@ class GameTracker {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     coverData = e.target.result;
-                    this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
+                    this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
                 };
                 reader.readAsDataURL(gameCoverFile);
             } else {
-                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData);
+                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
             }
     }
 
-    async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, coverData) {
+    async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, fullAchievements, coverData) {
         try {
             const game = this.games[gameIndex];
             let imageId = game.imageId;
@@ -469,6 +477,7 @@ class GameTracker {
                 completionDate: gameCompletionDate || null,
                 rating: gameRating ? parseInt(gameRating) : null,
                 comment: gameComment || null,
+                fullAchievements: !!fullAchievements,
                 imageId: imageId
             };
 
@@ -483,7 +492,7 @@ class GameTracker {
         }
     }
 
-    async saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameRating, gameComment, coverData) {
+    async saveGameWithCover(gameName, gameOriginalName, gamePlatform, completionDate, gameRating, gameComment, fullAchievements, coverData) {
         const gameId = Date.now();
         let imageId = null;
 
@@ -501,6 +510,7 @@ class GameTracker {
                 completionDate: completionDate || null,
                 rating: gameRating ? parseInt(gameRating) : null,
                 comment: gameComment || null,
+                fullAchievements: !!fullAchievements,
                 imageId: imageId,
                 addedAt: new Date().toISOString()
             };
@@ -524,6 +534,8 @@ class GameTracker {
         
         // 清除喜爱度评分
         document.querySelectorAll('input[name="rating"]').forEach(input => input.checked = false);
+        // 清除全成就复选框
+        try { document.getElementById('gameFullAchievements').checked = false; } catch (e) {}
         
         // 只在添加模式下设置今天的日期
         if (!this.currentEditingGameId) {
@@ -1083,6 +1095,7 @@ class GameTracker {
                 <div class="game-card-header">
                     ${coverImage}
                     ${platformBadge}
+                    ${game.fullAchievements ? `<div class="achievement-overlay" aria-hidden="true"><i class="fas fa-trophy"></i></div>` : ''}
                 </div>
                 
                 <div class="game-card-content">
