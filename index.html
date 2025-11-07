@@ -6,6 +6,7 @@
     <title>我的游戏记录</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
@@ -141,18 +142,29 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="gameCover">游戏封面</label>
+                            <label>游戏封面</label>
                             <div class="file-upload-container">
-                                <input type="file" id="gameCover" accept="image/*" class="file-input">
-                                <label for="gameCover" class="file-upload-label">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    <span>选择图片文件</span>
-                                </label>
-                                <div id="coverPreview" class="cover-preview" style="display: none;">
-                                    <img id="previewImage" src="" alt="预览">
-                                    <button type="button" id="removeCover" class="btn btn-danger btn-sm" aria-label="移除封面" title="移除封面">
-                                        <i class="fas fa-times" aria-hidden="true"></i>
-                                    </button>
+                                <input type="file" id="gameCover" accept="image/*" class="file-input" style="display: none;">
+                                <div class="file-upload-area">
+                                    <!-- 添加新游戏时显示的上传框 -->
+                                    <div class="file-upload-label" style="display: flex; align-items: center; justify-content: center; min-height: 200px; border: 2px dashed #ccc; border-radius: 8px; cursor: pointer;">
+                                        <div style="text-align: center;">
+                                            <i class="fas fa-cloud-upload-alt" style="font-size: 2em; margin-bottom: 10px;"></i>
+                                            <div>点击选择或拖放图片</div>
+                                        </div>
+                                    </div>
+                                    <!-- 预览区域 -->
+                                    <div id="coverPreview" class="cover-preview" style="display: none; position: relative;">
+                                        <img id="previewImage" src="" alt="预览" style="max-width: 100%; max-height: 200px; border-radius: 8px;">
+                                        <div class="cover-actions">
+                                            <button type="button" id="editCover" class="btn btn-secondary btn-sm" aria-label="编辑封面" title="编辑封面">
+                                                <i class="fas fa-crop-alt" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" id="removeCover" class="btn btn-danger btn-sm" aria-label="移除封面" title="移除封面">
+                                                <i class="fas fa-times" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <small class="form-help">可选：上传游戏封面图片（支持 JPG、PNG、GIF 格式）</small>
@@ -173,6 +185,52 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片编辑模态框 -->
+    <div id="imageEditorModal" class="modal">
+        <div class="modal-content image-editor-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-crop-alt"></i> 编辑图片</h2>
+                <button class="btn btn-icon" id="closeImageEditor" aria-label="关闭" title="关闭">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="image-editor-container">
+                    <div class="editor-main">
+                        <img id="imageEditor" src="" alt="编辑图片">
+                    </div>
+                    <div class="editor-controls">
+                        <div class="editor-buttons">
+                            <button type="button" class="btn btn-secondary" id="rotateLeft" title="向左旋转">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="rotateRight" title="向右旋转">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="zoomIn" title="放大">
+                                <i class="fas fa-search-plus"></i>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="zoomOut" title="缩小">
+                                <i class="fas fa-search-minus"></i>
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="resetCrop" title="重置">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="editor-actions">
+                            <button type="button" class="btn btn-primary" id="saveCrop">
+                                <i class="fas fa-check"></i> 应用修改
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancelCrop">
+                                <i class="fas fa-times"></i> 取消
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -224,6 +282,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>  

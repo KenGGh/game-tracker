@@ -2,6 +2,10 @@ class GameTracker {
     constructor() {
         this.games = [];
         this.platforms = [];
+        // 存储每个编辑会话/游戏对应的原始图片（File/Blob）
+        this.originalImages = {};
+        // 存储为原始 Blob 创建的 objectURL，以便在替换时可以撤销
+        this._objectUrlMap = {};
         this.sortBy = localStorage.getItem('sortBy') || 'completionDate';
         this.sortOrder = localStorage.getItem('sortOrder') || 'desc';
         this.mainTitle = localStorage.getItem('mainTitle') || '坑仔的游戏记录';
@@ -61,7 +65,7 @@ class GameTracker {
     }
 
     async loadData() {
-        try {
+    try {
             // 加载游戏数据
             this.games = await this.getAllFromStore('games') || [];
             
@@ -174,9 +178,44 @@ class GameTracker {
             this.addGame();
         });
 
-        // 文件上传事件
-        document.getElementById('gameCover').addEventListener('change', (e) => this.handleFileUpload(e));
-        document.getElementById('removeCover').addEventListener('click', () => this.removeCover());
+        // 文件上传相关事件
+        const gameCoverInput = document.getElementById('gameCover');
+        const uploadArea = document.querySelector('.file-upload-label');
+        const coverPreview = document.getElementById('coverPreview');
+        
+        // 文件选择事件
+        gameCoverInput.addEventListener('change', (e) => this.handleFileUpload(e));
+        
+        // 上传框点击事件（添加新游戏时）
+        uploadArea.addEventListener('click', () => {
+            gameCoverInput.click();
+        });
+        
+        // 预览区域点击事件（编辑模式时）
+        coverPreview.addEventListener('click', (e) => {
+            if (this.currentEditingGameId && e.target.tagName.toLowerCase() === 'img') {
+                gameCoverInput.click();
+            }
+        });
+        
+        // 删除按钮事件
+        document.getElementById('removeCover').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.removeCover();
+        });
+
+        // 编辑按钮事件
+        document.getElementById('editCover').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const previewImage = document.getElementById('previewImage');
+            if (previewImage.src) {
+                const orig = previewImage.dataset.original || null;
+                console.log('[debug] editCover click: previewImage.src=', previewImage.src, ' previewImage.dataset.original=', orig);
+                this.openImageEditor(previewImage.src, orig);
+            }
+        });
         
         // 添加评论字符计数功能
         const gameCommentInput = document.getElementById('gameComment');
@@ -244,6 +283,7 @@ class GameTracker {
         document.body.style.overflow = 'hidden';
         
         const deleteBtn = document.getElementById('deleteGameBtn');
+        const fileUploadLabel = document.querySelector('.file-upload-label');
         
         if (gameId) {
             // 编辑模式
@@ -252,6 +292,8 @@ class GameTracker {
             document.querySelector('.modal-header h2').innerHTML = '<i class="fas fa-edit"></i> 编辑游戏';
             document.querySelector('.form-actions button[type="submit"]').innerHTML = '<i class="fas fa-save"></i> 保存修改';
             deleteBtn.style.display = 'inline-flex';
+            // 编辑模式下隐藏上传框，预览图片可直接点击更换
+            fileUploadLabel.style.display = 'none';
             
             // 绑定删除事件
             deleteBtn.onclick = () => this.deleteGame(gameId);
@@ -262,6 +304,8 @@ class GameTracker {
             document.querySelector('.modal-header h2').innerHTML = '<i class="fas fa-plus"></i> 添加新游戏';
             document.querySelector('.form-actions button[type="submit"]').innerHTML = '<i class="fas fa-save"></i> 添加游戏';
             deleteBtn.style.display = 'none';
+            // 添加模式下显示上传框
+            fileUploadLabel.style.display = 'flex';
         }
     }
 
@@ -302,11 +346,85 @@ class GameTracker {
             coverSrc = game.cover;
         }
         
+        const coverPreview = document.getElementById('coverPreview');
+        const previewImage = document.getElementById('previewImage');
+        
         if (coverSrc) {
-            document.getElementById('previewImage').src = coverSrc;
-            document.getElementById('coverPreview').style.display = 'block';
+            previewImage.src = coverSrc;
+            // 优先尝试从数据库读取原始图片（imageId + '_original'）
+            try {
+                if (game.imageId) {
+                    const origFromDb = await this.getImage(`${game.imageId}_original`);
+                    if (origFromDb) {
+                        // 数据库中原始图以 dataURL 形式保存，直接使用
+                        previewImage.dataset.original = origFromDb;
+                        console.log('[debug] fillFormWithGameData: loaded original from DB for game', game.id, Boolean(origFromDb));
+                    } else if (this._objectUrlMap[game.id]) {
+                        previewImage.dataset.original = this._objectUrlMap[game.id];
+                        console.log('[debug] fillFormWithGameData: using objectUrlMap for game', game.id, this._objectUrlMap[game.id]);
+                    } else if (this.originalImages[game.id]) {
+                        const url = URL.createObjectURL(this.originalImages[game.id]);
+                        this._objectUrlMap[game.id] = url;
+                        previewImage.dataset.original = url;
+                        console.log('[debug] fillFormWithGameData: created objectURL from originalImages for game', game.id, url);
+                    } else {
+                        // 如果数据库里没有原始图，但当前有 coverSrc（比如以前保存过裁剪图），
+                        // 为了支持“再次裁切从同一源开始”的需求，保存当前 coverSrc 到 DB 作为原始备用。
+                        previewImage.dataset.original = coverSrc;
+                        console.log('[debug] fillFormWithGameData: fallback original set to coverSrc for game', game.id);
+                        try {
+                            if (game.imageId) {
+                                // 将当前 coverSrc 存为 `${imageId}_original` 以便后续编辑使用
+                                this.saveImage(`${game.imageId}_original`, coverSrc).then(() => {
+                                    console.log('[debug] fillFormWithGameData: saved fallback coverSrc as original in DB for', game.imageId);
+                                }).catch((err) => {
+                                    console.warn('[debug] fillFormWithGameData: failed to save fallback original for', game.imageId, err);
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('[debug] fillFormWithGameData: exception while saving fallback original', e);
+                        }
+                    }
+                } else {
+                    // 没有 imageId（老数据或临时），回退到已有映射或当前图片
+                    if (this._objectUrlMap[game.id]) {
+                        previewImage.dataset.original = this._objectUrlMap[game.id];
+                    } else if (this.originalImages[game.id]) {
+                        const url = URL.createObjectURL(this.originalImages[game.id]);
+                        this._objectUrlMap[game.id] = url;
+                        previewImage.dataset.original = url;
+                    } else {
+                        previewImage.dataset.original = coverSrc;
+                    }
+                }
+            } catch (e) {
+                // 回退到当前图片
+                previewImage.dataset.original = coverSrc;
+                console.warn('[debug] fillFormWithGameData: failed to set original for game', game.id, e);
+            }
+            coverPreview.style.display = 'block';
+
+            // 添加编辑按钮
+            const existingEditBtn = coverPreview.querySelector('.edit-cover-btn');
+            if (existingEditBtn) {
+                existingEditBtn.remove();
+            }
+            
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn btn-secondary btn-sm edit-cover-btn';
+            editButton.setAttribute('aria-label', '编辑图片');
+            editButton.setAttribute('title', '编辑图片');
+            editButton.innerHTML = '<i class="fas fa-crop-alt"></i>';
+            editButton.onclick = () => {
+                if (coverSrc) {
+                    const orig = previewImage.dataset.original || null;
+                    this.openImageEditor(coverSrc, orig);
+                }
+            };
+            coverPreview.appendChild(editButton);
         } else {
-            document.getElementById('coverPreview').style.display = 'none';
+            coverPreview.style.display = 'none';
         }
     }
 
@@ -333,21 +451,198 @@ class GameTracker {
         }
 
         try {
-            // 压缩图片
-            const compressedImage = await this.compressImage(file);
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const previewImage = document.getElementById('previewImage');
-                const coverPreview = document.getElementById('coverPreview');
-                
-                previewImage.src = e.target.result;
-                coverPreview.style.display = 'block';
-            };
-            reader.readAsDataURL(compressedImage);
+            const imageUrl = URL.createObjectURL(file);
+
+            // 保存原始文件到 session 映射，key 使用当前编辑的 gameId 或 'new'
+            const editKey = this.currentEditingGameId || 'new';
+            this.originalImages[editKey] = file;
+            // 若之前为该 key 创建过 objectURL，先撤销
+            if (this._objectUrlMap[editKey]) {
+                try { URL.revokeObjectURL(this._objectUrlMap[editKey]); } catch (e) {}
+                this._objectUrlMap[editKey] = null;
+            }
+            // 创建并保存用于后续直接访问的 objectURL
+            this._objectUrlMap[editKey] = imageUrl;
+
+            // 打开编辑器时传入 editKey，编辑器会优先使用 originalImages[editKey]
+            this.openImageEditor(imageUrl, editKey);
         } catch (error) {
             console.error('处理图片失败:', error);
             this.showNotification('处理图片失败', 'error');
+        }
+    }
+
+    /**
+     * 打开图片编辑器
+     * @param {string} imageUrl - 当前显示的图片 URL（objectURL 或 dataURL）
+     * @param {string|Blob|null} originalKeyOrSrc - 如果是字符串并且对应 originalImages 中有 Blob，会优先使用该原始 Blob；
+     *        也可以直接传入一个 dataURL/string
+     */
+    openImageEditor(imageUrl, originalKeyOrSrc = null) {
+        const modal = document.getElementById('imageEditorModal');
+        const imageEditor = document.getElementById('imageEditor');
+        let cropper = null;
+
+        // 显示模态框
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+
+        // 决定使用哪个源作为裁剪的“原图”
+        let sourceToUse = imageUrl;
+        try {
+            // 如果传入的是 editKey 并且有原始 Blob
+            if (typeof originalKeyOrSrc === 'string' && this.originalImages[originalKeyOrSrc]) {
+                // 如果已经有为该 Blob 创建的 objectURL，则复用
+                if (this._objectUrlMap[originalKeyOrSrc]) {
+                    sourceToUse = this._objectUrlMap[originalKeyOrSrc];
+                } else {
+                    sourceToUse = URL.createObjectURL(this.originalImages[originalKeyOrSrc]);
+                    this._objectUrlMap[originalKeyOrSrc] = sourceToUse;
+                }
+            } else if (originalKeyOrSrc && typeof originalKeyOrSrc === 'string') {
+                // 如果直接传入了一个字符串（比如 dataURL），则使用它
+                sourceToUse = originalKeyOrSrc;
+            }
+        } catch (e) {
+            console.warn('决定裁剪源时发生错误，回退到传入的 imageUrl', e);
+            sourceToUse = imageUrl;
+        }
+
+        console.log('[debug] openImageEditor: imageUrl=', imageUrl, ' originalKeyOrSrc=', originalKeyOrSrc, ' -> sourceToUse=', sourceToUse);
+
+        // 设置图片源并初始化裁剪器
+        imageEditor.src = sourceToUse;
+        imageEditor.onload = () => {
+            cropper = new Cropper(imageEditor, {
+                aspectRatio: 16/9, // 设置为16:9的比例
+                viewMode: 2, // 限制裁剪框不超出图片的范围
+                dragMode: 'move', // 默认移动模式
+                autoCropArea: 0.8, // 自动裁剪区域大小
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: true,
+                guides: true,
+                center: true,
+                highlight: true,
+                responsive: true,
+                modal: true,
+                background: false,
+            });
+        };
+
+        // 绑定控制按钮事件
+        document.getElementById('rotateLeft').onclick = () => cropper.rotate(-90);
+        document.getElementById('rotateRight').onclick = () => cropper.rotate(90);
+        document.getElementById('zoomIn').onclick = () => cropper.zoom(0.1);
+        document.getElementById('zoomOut').onclick = () => cropper.zoom(-0.1);
+        document.getElementById('resetCrop').onclick = () => cropper.reset();
+
+        // 保存按钮事件
+        document.getElementById('saveCrop').onclick = async () => {
+            try {
+                const canvas = cropper.getCroppedCanvas({
+                    width: 800,    // 最大宽度
+                    height: 800,   // 最大高度
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high',
+                });
+
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.9);
+                });
+
+                // 处理裁剪后的图片
+                // 当处理完成后，保留原始引用（如果是通过 editKey 打开的，这里 originalKeyOrSrc 会传入）
+                await this.handleCroppedImage(blob);
+
+                // 清理并关闭编辑器
+                this.closeImageEditor(modal, cropper, imageUrl);
+            } catch (error) {
+                console.error('保存裁剪图片失败:', error);
+                this.showNotification('保存裁剪图片失败', 'error');
+            }
+        };
+
+        // 取消按钮事件
+        document.getElementById('cancelCrop').onclick = () => {
+            this.closeImageEditor(modal, cropper, imageUrl);
+        };
+
+        // 关闭按钮事件
+        document.getElementById('closeImageEditor').onclick = () => {
+            this.closeImageEditor(modal, cropper, imageUrl);
+        };
+
+        // 点击背景关闭
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                this.closeImageEditor(modal, cropper, imageUrl);
+            }
+        };
+    }
+
+    closeImageEditor(modal, cropper, imageUrl) {
+        if (cropper) {
+            cropper.destroy();
+        }
+        modal.classList.remove('show');
+        document.body.style.overflow = 'auto';
+        try {
+            // 仅在 imageUrl 是 objectURL 并且不在我们保存的 _objectUrlMap 中时撤销
+            if (typeof imageUrl === 'string' && imageUrl.startsWith('blob:')) {
+                const urls = Object.values(this._objectUrlMap || {});
+                const isManaged = urls.includes(imageUrl);
+                if (!isManaged) {
+                    URL.revokeObjectURL(imageUrl);
+                }
+            }
+        } catch (e) {
+            // 忽略 revoke 错误
+        }
+    }
+
+    async handleCroppedImage(blob) {
+        const coverPreview = document.getElementById('coverPreview');
+        const previewImage = document.getElementById('previewImage');
+        const fileUploadLabel = document.querySelector('.file-upload-label');
+        const gameCoverInput = document.getElementById('gameCover');
+
+        try {
+            // 压缩图片
+            const compressedImage = await this.compressImage(blob);
+
+            // 创建一个新的 File 对象
+            const croppedFile = new File([compressedImage], 'cropped_image.jpg', {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+            });
+
+            // 创建一个新的 FileList 对象（使用 DataTransfer API）
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(croppedFile);
+            
+            // 将新的 FileList 设置到文件输入框
+            gameCoverInput.files = dataTransfer.files;
+
+            // 显示预览
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                console.log('[debug] handleCroppedImage: set previewImage.src from cropped result; current editing key=', this.currentEditingGameId || 'new');
+                coverPreview.style.display = 'block';
+                
+                // 如果是添加模式，隐藏上传框
+                if (!this.currentEditingGameId) {
+                    fileUploadLabel.style.display = 'none';
+                }
+                
+                // 更新提示文本
+                coverPreview.title = '点击更换图片';
+            };
+            reader.readAsDataURL(compressedImage);
+        } catch (error) {
+            console.error('处理裁剪图片失败:', error);
+            this.showNotification('处理裁剪图片失败', 'error');
         }
     }
 
@@ -391,9 +686,37 @@ class GameTracker {
     }
 
     removeCover() {
-        document.getElementById('gameCover').value = '';
-        document.getElementById('coverPreview').style.display = 'none';
-        document.getElementById('previewImage').src = '';
+        const gameCover = document.getElementById('gameCover');
+        const coverPreview = document.getElementById('coverPreview');
+        const previewImage = document.getElementById('previewImage');
+        const fileUploadLabel = document.querySelector('.file-upload-label');
+
+        gameCover.value = '';
+        coverPreview.style.display = 'none';
+        previewImage.src = '';
+        // 如果存在为该预览创建的 objectURL，尝试撤销并从映射中移除
+        try {
+            const orig = previewImage.dataset.original;
+            if (orig && typeof orig === 'string' && orig.startsWith('blob:')) {
+                // 在映射中查找并删除
+                for (const key of Object.keys(this._objectUrlMap || {})) {
+                    if (this._objectUrlMap[key] === orig) {
+                        try { URL.revokeObjectURL(orig); } catch (e) {}
+                        delete this._objectUrlMap[key];
+                        delete this.originalImages[key];
+                        break;
+                    }
+                }
+            }
+        } catch (e) {
+            // 忽略
+        }
+        previewImage.removeAttribute('data-original');
+        
+        // 如果是添加模式，显示上传框
+        if (!this.currentEditingGameId) {
+            fileUploadLabel.style.display = 'flex';
+        }
     }
 
     addGame() {
@@ -467,6 +790,24 @@ class GameTracker {
                     imageId = `game_${game.id}_cover`;
                 }
                 await this.saveImage(imageId, coverData);
+
+                // 如果在本会话中存在原始图片（Blob），把原始图片也保存到 images 存储，便于后续从原图再次裁剪
+                try {
+                    const origBlob = this.originalImages && this.originalImages[game.id];
+                    if (origBlob) {
+                        const origDataUrl = await new Promise((resolve, reject) => {
+                            const r = new FileReader();
+                            r.onload = (e) => resolve(e.target.result);
+                            r.onerror = () => reject(new Error('读取原始图片失败'));
+                            r.readAsDataURL(origBlob);
+                        });
+                        await this.saveImage(`${imageId}_original`, origDataUrl);
+                        // 保存后可以清理内存中的原始 Blob 映射（可选）
+                        try { delete this.originalImages[game.id]; } catch (e) {}
+                    }
+                } catch (e) {
+                    console.warn('保存原始图片到数据库失败：', e);
+                }
             }
 
             this.games[gameIndex] = {
@@ -500,6 +841,25 @@ class GameTracker {
             if (coverData) {
                 imageId = `game_${gameId}_cover`;
                 await this.saveImage(imageId, coverData);
+
+                // 如果上传时有保存的原始图片（key 为 'new'），把原始图片也保存到 images 存储，便于后续从原图再次裁剪
+                try {
+                    const origBlob = this.originalImages && this.originalImages['new'];
+                    if (origBlob) {
+                        const origDataUrl = await new Promise((resolve, reject) => {
+                            const r = new FileReader();
+                            r.onload = (e) => resolve(e.target.result);
+                            r.onerror = () => reject(new Error('读取原始图片失败'));
+                            r.readAsDataURL(origBlob);
+                        });
+                        await this.saveImage(`${imageId}_original`, origDataUrl);
+                        // 保存后清理内存中的 new 原始 Blob 映射
+                        try { delete this.originalImages['new']; } catch (e) {}
+                        try { if (this._objectUrlMap && this._objectUrlMap['new']) { URL.revokeObjectURL(this._objectUrlMap['new']); delete this._objectUrlMap['new']; } } catch (e) {}
+                    }
+                } catch (e) {
+                    console.warn('保存原始图片到数据库失败：', e);
+                }
             }
 
             const game = {
@@ -1126,6 +1486,35 @@ class GameTracker {
     handleCardClick(event, gameId) {
         // 打开编辑模态框
         this.openModal(gameId);
+    }
+
+    async editExistingCover(event, gameId) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const game = this.games.find(g => g.id === gameId);
+        if (!game) return;
+
+        let imageData = null;
+        if (game.imageId) {
+            imageData = await this.getImage(game.imageId);
+        }
+        if (!imageData && game.cover) {
+            imageData = game.cover;
+        }
+        
+        if (imageData) {
+            // 如果表单中的 previewImage 保存了原始源，在打开编辑器时优先使用
+            const previewImage = document.getElementById('previewImage');
+            const orig = previewImage ? previewImage.dataset.original : null;
+            if (orig) {
+                // 传入 dataURL/string 原始源
+                this.openImageEditor(imageData, orig);
+            } else {
+                // 传入当前 imageData（回退）
+                this.openImageEditor(imageData);
+            }
+        }
     }
 
     showNotification(message, type = 'info') {
