@@ -7,6 +7,17 @@ class GameTracker {
         // 存储为原始 Blob 创建的 objectURL，以便在替换时可以撤销
         this._objectUrlMap = {};
         this.coverRemoved = false;
+        this.modalDragFromContent = false;
+        this.ignoreNextModalClose = false;
+        this.imageModalDraggingFromContent = false;
+        this.ignoreNextImageModalClose = false;
+        this._imageModalMouseDownHandler = null;
+        this._imageModalMouseUpHandler = null;
+        this._imageModalOverlayClickHandler = null;
+        this.imageModalPointerDownOnOverlay = false;
+        this.imageModalShouldClose = false;
+        this.imageModalDraggingFromContent = false;
+        this.ignoreNextImageModalClose = false;
         this.sortBy = localStorage.getItem('sortBy') || 'completionDate';
         this.sortOrder = localStorage.getItem('sortOrder') || 'desc';
         this.mainTitle = localStorage.getItem('mainTitle') || '坑仔的游戏记录';
@@ -265,9 +276,23 @@ class GameTracker {
         // 设置模态框事件
         document.getElementById('closeSettingsModal').addEventListener('click', () => this.closeSettingsModal());
 
-        // 点击模态框背景关闭
-        document.getElementById('addGameModal').addEventListener('click', (e) => {
-            if (e.target.id === 'addGameModal') {
+        // 点击模态框背景关闭（避免拖拽触发误关闭）
+        const addGameModal = document.getElementById('addGameModal');
+        addGameModal.addEventListener('mousedown', (e) => {
+            this.modalDragFromContent = Boolean(e.target.closest('.modal-content'));
+        });
+        addGameModal.addEventListener('mouseup', (e) => {
+            if (this.modalDragFromContent && e.target === addGameModal) {
+                this.ignoreNextModalClose = true;
+            }
+            this.modalDragFromContent = false;
+        });
+        addGameModal.addEventListener('click', (e) => {
+            if (e.target === addGameModal) {
+                if (this.ignoreNextModalClose) {
+                    this.ignoreNextModalClose = false;
+                    return;
+                }
                 this.closeModal();
             }
         });
@@ -283,6 +308,8 @@ class GameTracker {
         document.getElementById('addGameModal').classList.add('show');
         document.body.style.overflow = 'hidden';
         this.coverRemoved = false;
+        this.modalDragFromContent = false;
+        this.ignoreNextModalClose = false;
         
         const deleteBtn = document.getElementById('deleteGameBtn');
         const fileUploadLabel = document.querySelector('.file-upload-label');
@@ -496,6 +523,10 @@ class GameTracker {
         // 显示模态框
         modal.classList.add('show');
         document.body.style.overflow = 'hidden';
+        this.imageModalDraggingFromContent = false;
+        this.ignoreNextImageModalClose = false;
+        this.imageModalPointerDownOnOverlay = false;
+        this.imageModalShouldClose = false;
 
         // 决定使用哪个源作为裁剪的“原图”
         let sourceToUse = imageUrl;
@@ -543,7 +574,7 @@ class GameTracker {
         // 绑定控制按钮事件
         document.getElementById('rotateLeft').onclick = () => cropper.rotate(-90);
         document.getElementById('rotateRight').onclick = () => cropper.rotate(90);
-        document.getElementById('zoomIn').onclick = () => cropper.zoom(0.1);
+                    // 点击模态框背景关闭
         document.getElementById('zoomOut').onclick = () => cropper.zoom(-0.1);
         document.getElementById('resetCrop').onclick = () => cropper.reset();
 
@@ -583,18 +614,76 @@ class GameTracker {
             this.closeImageEditor(modal, cropper, imageUrl);
         };
 
-        // 点击背景关闭
-        modal.onclick = (e) => {
-            if (e.target === modal) {
-                this.closeImageEditor(modal, cropper, imageUrl);
+        this._imageModalMouseDownHandler = (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            this.imageModalDraggingFromContent = Boolean(target && target.closest('.modal-content'));
+            this.imageModalPointerDownOnOverlay = target === modal;
+            this.imageModalShouldClose = false;
+        };
+        this._imageModalMouseUpHandler = (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (this.imageModalPointerDownOnOverlay && target === modal) {
+                this.imageModalShouldClose = true;
+            } else {
+                this.imageModalShouldClose = false;
+            }
+
+            if (this.imageModalDraggingFromContent) {
+                const releasedInsideContent = Boolean(target && target.closest('.modal-content'));
+                if (!releasedInsideContent) {
+                    this.ignoreNextImageModalClose = true;
+                }
+            }
+
+            this.imageModalPointerDownOnOverlay = false;
+            this.imageModalDraggingFromContent = false;
+        };
+        this._imageModalOverlayClickHandler = (event) => {
+            if (event.target === modal) {
+                if (this.imageModalDraggingFromContent) {
+                    this.imageModalDraggingFromContent = false;
+                    this.imageModalPointerDownOnOverlay = false;
+                    this.imageModalShouldClose = false;
+                    this.ignoreNextImageModalClose = false;
+                    return;
+                }
+                if (this.ignoreNextImageModalClose) {
+                    this.ignoreNextImageModalClose = false;
+                     this.imageModalShouldClose = false;
+                    return;
+                }
+                if (this.imageModalShouldClose) {
+                    this.imageModalShouldClose = false;
+                    this.closeImageEditor(modal, cropper, imageUrl);
+                }
             }
         };
+
+        modal.addEventListener('mousedown', this._imageModalMouseDownHandler);
+        document.addEventListener('mouseup', this._imageModalMouseUpHandler, true);
+        modal.addEventListener('click', this._imageModalOverlayClickHandler);
     }
 
     closeImageEditor(modal, cropper, imageUrl) {
         if (cropper) {
             cropper.destroy();
         }
+        if (this._imageModalMouseDownHandler) {
+            modal.removeEventListener('mousedown', this._imageModalMouseDownHandler);
+            this._imageModalMouseDownHandler = null;
+        }
+        if (this._imageModalOverlayClickHandler) {
+            modal.removeEventListener('click', this._imageModalOverlayClickHandler);
+            this._imageModalOverlayClickHandler = null;
+        }
+        if (this._imageModalMouseUpHandler) {
+            document.removeEventListener('mouseup', this._imageModalMouseUpHandler, true);
+            this._imageModalMouseUpHandler = null;
+        }
+        this.imageModalDraggingFromContent = false;
+        this.ignoreNextImageModalClose = false;
+        this.imageModalPointerDownOnOverlay = false;
+        this.imageModalShouldClose = false;
         modal.classList.remove('show');
         document.body.style.overflow = 'auto';
         try {
