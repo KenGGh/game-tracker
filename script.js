@@ -6,6 +6,7 @@ class GameTracker {
         this.originalImages = {};
         // 存储为原始 Blob 创建的 objectURL，以便在替换时可以撤销
         this._objectUrlMap = {};
+        this.coverRemoved = false;
         this.sortBy = localStorage.getItem('sortBy') || 'completionDate';
         this.sortOrder = localStorage.getItem('sortOrder') || 'desc';
         this.mainTitle = localStorage.getItem('mainTitle') || '坑仔的游戏记录';
@@ -281,6 +282,7 @@ class GameTracker {
     async openModal(gameId = null) {
         document.getElementById('addGameModal').classList.add('show');
         document.body.style.overflow = 'hidden';
+        this.coverRemoved = false;
         
         const deleteBtn = document.getElementById('deleteGameBtn');
         const fileUploadLabel = document.querySelector('.file-upload-label');
@@ -292,8 +294,13 @@ class GameTracker {
             document.querySelector('.modal-header h2').innerHTML = '<i class="fas fa-edit"></i> 编辑游戏';
             document.querySelector('.form-actions button[type="submit"]').innerHTML = '<i class="fas fa-save"></i> 保存修改';
             deleteBtn.style.display = 'inline-flex';
-            // 编辑模式下隐藏上传框，预览图片可直接点击更换
-            fileUploadLabel.style.display = 'none';
+            // 编辑模式下，如果游戏没有封面，则显示上传框
+            const game = this.games.find(g => g.id === gameId);
+            if (game && (game.imageId || game.cover)) {
+                fileUploadLabel.style.display = 'none';
+            } else {
+                fileUploadLabel.style.display = 'flex';
+            }
             
             // 绑定删除事件
             deleteBtn.onclick = () => this.deleteGame(gameId);
@@ -464,6 +471,9 @@ class GameTracker {
             // 创建并保存用于后续直接访问的 objectURL
             this._objectUrlMap[editKey] = imageUrl;
 
+            // 选择了新图片，视为未删除状态
+            this.coverRemoved = false;
+
             // 打开编辑器时传入 editKey，编辑器会优先使用 originalImages[editKey]
             this.openImageEditor(imageUrl, editKey);
         } catch (error) {
@@ -630,11 +640,10 @@ class GameTracker {
                 previewImage.src = e.target.result;
                 console.log('[debug] handleCroppedImage: set previewImage.src from cropped result; current editing key=', this.currentEditingGameId || 'new');
                 coverPreview.style.display = 'block';
-                
-                // 如果是添加模式，隐藏上传框
-                if (!this.currentEditingGameId) {
-                    fileUploadLabel.style.display = 'none';
-                }
+                this.coverRemoved = false;
+
+                // 选中图片后隐藏上传区域
+                fileUploadLabel.style.display = 'none';
                 
                 // 更新提示文本
                 coverPreview.title = '点击更换图片';
@@ -712,11 +721,10 @@ class GameTracker {
             // 忽略
         }
         previewImage.removeAttribute('data-original');
+        this.coverRemoved = true;
         
-        // 如果是添加模式，显示上传框
-        if (!this.currentEditingGameId) {
-            fileUploadLabel.style.display = 'flex';
-        }
+        // 移除图片后重新显示上传区域
+        fileUploadLabel.style.display = 'flex';
     }
 
     addGame() {
@@ -766,17 +774,18 @@ class GameTracker {
         const game = this.games[gameIndex];
         
         // 处理封面图片
-        let coverData = game.cover; // 保持原有封面
-                    if (gameCoverFile) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    coverData = e.target.result;
-                    this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
-                };
-                reader.readAsDataURL(gameCoverFile);
-            } else {
-                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
-            }
+        const coverData = this.coverRemoved ? null : game.cover;
+
+        if (gameCoverFile) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const newCoverData = e.target.result;
+                this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, newCoverData);
+            };
+            reader.readAsDataURL(gameCoverFile);
+        } else {
+            this.saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, gameFullAchievements, coverData);
+        }
     }
 
     async saveUpdatedGame(gameIndex, gameName, gameOriginalName, gamePlatform, gameCompletionDate, gameRating, gameComment, fullAchievements, coverData) {
@@ -808,6 +817,10 @@ class GameTracker {
                 } catch (e) {
                     console.warn('保存原始图片到数据库失败：', e);
                 }
+            } else if (this.coverRemoved && imageId) {
+                await this.deleteImage(imageId);
+                await this.deleteImage(`${imageId}_original`);
+                imageId = null;
             }
 
             this.games[gameIndex] = {
@@ -819,7 +832,8 @@ class GameTracker {
                 rating: gameRating ? parseInt(gameRating) : null,
                 comment: gameComment || null,
                 fullAchievements: !!fullAchievements,
-                imageId: imageId
+                imageId: imageId,
+                cover: coverData || null
             };
 
             await this.saveGames();
@@ -891,6 +905,7 @@ class GameTracker {
         document.getElementById('addGameForm').reset();
         document.getElementById('coverPreview').style.display = 'none';
         document.getElementById('previewImage').src = '';
+        this.coverRemoved = false;
         
         // 清除喜爱度评分
         document.querySelectorAll('input[name="rating"]').forEach(input => input.checked = false);
@@ -954,6 +969,21 @@ class GameTracker {
         } catch (error) {
             console.error('保存图片失败:', error);
             throw error;
+        }
+    }
+
+    async deleteImage(imageId) {
+        if (!imageId) return;
+        try {
+            const transaction = this.db.transaction('images', 'readwrite');
+            const store = transaction.objectStore('images');
+            await new Promise((resolve, reject) => {
+                const request = store.delete(imageId);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        } catch (error) {
+            console.error('删除图片失败:', error);
         }
     }
 
