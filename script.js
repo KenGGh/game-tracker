@@ -1320,7 +1320,8 @@ class GameTracker {
 
         // 为每个游戏生成一个数据集，在其月份位置为1，实现堆叠
         const datasets = [];
-        const games = yearGames.filter(g => g && g.completionDate && g.name);
+        const games = yearGames.filter(g => g && g.completionDate && g.name)
+            .sort((a, b) => new Date(a.completionDate) - new Date(b.completionDate));
         for (let i = 0; i < games.length; i++) {
             const game = games[i];
             const month = new Date(game.completionDate).getMonth();
