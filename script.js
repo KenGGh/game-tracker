@@ -149,6 +149,7 @@ class GameTracker {
     }
 
     init() {
+        this.checkServerAndStart();
         this.bindEvents();
         this.renderGames();
         this.updatePlatformOptions();
@@ -156,6 +157,32 @@ class GameTracker {
         this.updateTitles();
         this.initTitleInputs();
         this.updateToggleChartsButton();
+    }
+
+    async checkServerAndStart() {
+        try {
+            // 尝试访问服务器，如果失败则尝试启动
+            const response = await fetch('http://localhost:3000/api/search', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keyword: '' })
+            }).catch(() => null);
+            
+            if (!response || !response.ok) {
+                console.log('服务器未运行，尝试启动...');
+                // 通过加载一个页面来触发服务器启动
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = 'http://localhost:3000';
+                document.body.appendChild(iframe);
+                
+                // 等待一下让服务器启动
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                document.body.removeChild(iframe);
+            }
+        } catch (e) {
+            console.log('启动服务器:', e.message);
+        }
     }
 
     updateTitles() {
@@ -244,6 +271,26 @@ class GameTracker {
                 } else {
                     helpText.textContent = `可选：不超过20个字的简短评论（超出${Math.abs(remaining)}个字符）`;
                 }
+            }
+        });
+
+        // Bangumi 搜索功能
+        document.getElementById('searchBangumiBtn').addEventListener('click', () => this.searchBangumi());
+        
+        // 回车键搜索
+        document.getElementById('gameName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.searchBangumi();
+            }
+        });
+
+        // 点击其他地方关闭搜索结果
+        document.addEventListener('click', (e) => {
+            const searchResults = document.getElementById('bangumiSearchResults');
+            const searchBtn = document.getElementById('searchBangumiBtn');
+            if (!searchResults.contains(e.target) && !searchBtn.contains(e.target)) {
+                searchResults.classList.remove('show');
             }
         });
 
@@ -1669,6 +1716,179 @@ class GameTracker {
                 document.body.removeChild(notification);
             }, 300);
         }, 3000);
+    }
+
+    // Bangumi 搜索功能
+    async searchBangumi() {
+        const keyword = document.getElementById('gameName').value.trim();
+        const searchResults = document.getElementById('bangumiSearchResults');
+        const searchBtn = document.getElementById('searchBangumiBtn');
+
+        if (!keyword) {
+            this.showNotification('请输入游戏名称', 'info');
+            return;
+        }
+
+        // 显示加载状态
+        searchBtn.disabled = true;
+        searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        searchResults.innerHTML = '<div class="bangumi-search-loading">搜索中...</div>';
+        searchResults.classList.add('show');
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+            const response = await fetch('http://localhost:3000/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    keyword: keyword,
+                    sort: 'rank',
+                    filter: {
+                        type: [4] // 游戏类型
+                    }
+                }),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                throw new Error(`API 请求失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Bangumi API 响应:', data); // 调试用
+
+            // 清空之前的结果
+            searchResults.innerHTML = '';
+
+            // 检查 API 返回的数据结构
+            let items = [];
+            if (Array.isArray(data)) {
+                items = data;
+            } else if (data.data && Array.isArray(data.data)) {
+                items = data.data;
+            } else if (data.list && Array.isArray(data.list)) {
+                items = data.list;
+            } else {
+                console.log('未知的响应格式:', data);
+            }
+
+            if (items.length === 0) {
+                searchResults.innerHTML = '<div class="bangumi-search-empty">未找到相关游戏</div>';
+                return;
+            }
+
+            // 渲染搜索结果
+            items.forEach(subject => {
+                const item = document.createElement('div');
+                item.className = 'bangumi-search-item';
+
+                // 获取封面图片
+                const coverImage = subject.images?.common || subject.images?.large || '';
+                const name = subject.name_cn || subject.name || '未知游戏';
+                const nameCn = subject.name_cn && subject.name ? subject.name : '';
+
+                item.innerHTML = `
+                    ${coverImage ? `<img src="${coverImage}" alt="${name}" onerror="this.style.display='none'">` : '<div style="width:50px;height:70px;background:#e2e8f0;border-radius:4px;"></div>'}
+                    <div class="bangumi-search-item-info">
+                        <div class="bangumi-search-item-name">${this.escapeHtml(name)}</div>
+                        ${nameCn ? `<div class="bangumi-search-item-name-cn">${this.escapeHtml(nameCn)}</div>` : ''}
+                    </div>
+                `;
+
+                // 点击选择结果
+                item.addEventListener('click', () => {
+                    this.selectBangumiResult(subject);
+                });
+
+                searchResults.appendChild(item);
+            });
+
+        } catch (error) {
+            console.error('搜索失败:', error);
+            console.log('Response data:', data); // 调试用
+            let errorMessage = '搜索失败';
+            if (error.name === 'AbortError') {
+                errorMessage = '搜索超时，请检查网络连接';
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = '无法连接到 Bangumi 服务器，请检查网络或稍后重试';
+            } else {
+                errorMessage = `搜索失败: ${error.message}`;
+            }
+            searchResults.innerHTML = `<div class="bangumi-search-error">${errorMessage}</div>`;
+            this.showNotification(errorMessage, 'error');
+        } finally {
+            // 恢复按钮状态
+            searchBtn.disabled = false;
+            searchBtn.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
+        }
+    }
+
+    selectBangumiResult(subject) {
+        // 填充游戏名称（优先使用中文名）
+        const name = subject.name_cn || subject.name || '';
+        document.getElementById('gameName').value = name;
+
+        // 填充外文名（如果有中文名且有外文名）
+        if (subject.name_cn && subject.name) {
+            document.getElementById('gameOriginalName').value = subject.name;
+        }
+
+        // 下载并设置封面图片
+        const coverImage = subject.images?.common || subject.images?.large || subject.images?.small || '';
+        
+        if (coverImage) {
+            this.downloadAndSetCover(coverImage);
+        }
+
+        // 隐藏搜索结果
+        document.getElementById('bangumiSearchResults').classList.remove('show');
+
+        this.showNotification('已自动填充游戏信息', 'success');
+    }
+
+    async downloadAndSetCover(imageUrl) {
+        try {
+            // 使用 fetch 获取图片并转换为 dataURL
+            const response = await fetch(imageUrl);
+            if (!response.ok) {
+                throw new Error('图片下载失败');
+            }
+            const blob = await response.blob();
+            
+            // 转换为 dataURL
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const coverData = e.target.result;
+                
+                // 显示预览
+                const coverPreview = document.getElementById('coverPreview');
+                const previewImage = document.getElementById('previewImage');
+                const fileUploadLabel = document.querySelector('.file-upload-label');
+                
+                previewImage.src = coverData;
+                previewImage.dataset.original = coverData; // 保存原始图用于后续裁剪
+                coverPreview.style.display = 'block';
+                fileUploadLabel.style.display = 'none';
+                
+                // 设置为已选择文件状态（创建一个虚拟的 File 对象）
+                const file = new File([blob], 'cover.jpg', { type: 'image/jpeg' });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                document.getElementById('gameCover').files = dataTransfer.files;
+                
+                this.coverRemoved = false;
+            };
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.error('设置封面失败:', error);
+            this.showNotification('设置封面失败', 'error');
+        }
     }
 
     escapeHtml(text) {

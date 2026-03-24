@@ -418,6 +418,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    position: relative;
 }
 
 .form-group label {
@@ -1205,4 +1206,133 @@ body {
     background-color: #fff;
     width: 10px;
     height: 10px;
+}
+
+/* 搜索输入框样式 */
+.search-input-group {
+    display: flex;
+    gap: 8px;
+}
+
+.search-input-group input {
+    flex: 1;
+    min-width: 40px;
+}
+
+.btn-search {
+    padding: 12px 15px;
+    background: #667eea;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-search:hover {
+    background: #5a67d8;
+    transform: translateY(-2px);
+}
+
+.btn-search:disabled {
+    background: #a0aec0;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Bangumi 搜索结果样式 */
+.bangumi-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 450px;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    max-height: 500px;
+    overflow-y: auto;
+    z-index: 100;
+    margin-top: 4px;
+    display: none;
+    grid-template-columns: repeat(2, 200px);
+    gap: 20px;
+}
+
+.bangumi-search-results.show {
+    display: grid;
+}
+
+.bangumi-search-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.bangumi-search-item:nth-child(2n-1) {
+    border-right: 1px solid #e2e8f0;
+}
+
+.bangumi-search-item:last-child {
+    border-bottom: none;
+}
+
+.bangumi-search-item:hover {
+    background: #f7fafc;
+}
+
+.bangumi-search-item img {
+    width: 50px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #e2e8f0;
+}
+
+.bangumi-search-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bangumi-search-item-name {
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bangumi-search-item-name-cn {
+    font-size: 0.85rem;
+    color: #718096;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bangumi-search-loading {
+    padding: 20px;
+    text-align: center;
+    color: #718096;
+}
+
+.bangumi-search-error {
+    padding: 20px;
+    text-align: center;
+    color: #e53e3e;
+}
+
+.bangumi-search-empty {
+    padding: 20px;
+    text-align: center;
+    color: #718096;
 }
