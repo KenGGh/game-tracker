@@ -1735,98 +1735,115 @@ class GameTracker {
         searchResults.innerHTML = '<div class="bangumi-search-loading">搜索中...</div>';
         searchResults.classList.add('show');
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+        // 尝试搜索，如果服务器未运行则等待并重试
+        let data = null;
+        let searchSuccessful = false;
+        
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-            const response = await fetch('http://localhost:3000/api/search', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    keyword: keyword,
-                    sort: 'rank',
-                    filter: {
-                        type: [4] // 游戏类型
-                    }
-                }),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                throw new Error(`API 请求失败: ${response.status}`);
-            }
-
-            const data = await response.json();
-            console.log('Bangumi API 响应:', data); // 调试用
-
-            // 清空之前的结果
-            searchResults.innerHTML = '';
-
-            // 检查 API 返回的数据结构
-            let items = [];
-            if (Array.isArray(data)) {
-                items = data;
-            } else if (data.data && Array.isArray(data.data)) {
-                items = data.data;
-            } else if (data.list && Array.isArray(data.list)) {
-                items = data.list;
-            } else {
-                console.log('未知的响应格式:', data);
-            }
-
-            if (items.length === 0) {
-                searchResults.innerHTML = '<div class="bangumi-search-empty">未找到相关游戏</div>';
-                return;
-            }
-
-            // 渲染搜索结果
-            items.forEach(subject => {
-                const item = document.createElement('div');
-                item.className = 'bangumi-search-item';
-
-                // 获取封面图片
-                const coverImage = subject.images?.common || subject.images?.large || '';
-                const name = subject.name_cn || subject.name || '未知游戏';
-                const nameCn = subject.name_cn && subject.name ? subject.name : '';
-
-                item.innerHTML = `
-                    ${coverImage ? `<img src="${coverImage}" alt="${name}" onerror="this.style.display='none'">` : '<div style="width:50px;height:70px;background:#e2e8f0;border-radius:4px;"></div>'}
-                    <div class="bangumi-search-item-info">
-                        <div class="bangumi-search-item-name">${this.escapeHtml(name)}</div>
-                        ${nameCn ? `<div class="bangumi-search-item-name-cn">${this.escapeHtml(nameCn)}</div>` : ''}
-                    </div>
-                `;
-
-                // 点击选择结果
-                item.addEventListener('click', () => {
-                    this.selectBangumiResult(subject);
+                const response = await fetch('http://localhost:3000/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        keyword: keyword,
+                        sort: 'rank',
+                        filter: {
+                            type: [4] // 游戏类型
+                        }
+                    }),
+                    signal: controller.signal
                 });
 
-                searchResults.appendChild(item);
-            });
+                clearTimeout(timeoutId);
 
-        } catch (error) {
-            console.error('搜索失败:', error);
-            console.log('Response data:', data); // 调试用
-            let errorMessage = '搜索失败';
-            if (error.name === 'AbortError') {
-                errorMessage = '搜索超时，请检查网络连接';
-            } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                errorMessage = '无法连接到 Bangumi 服务器，请检查网络或稍后重试';
-            } else {
-                errorMessage = `搜索失败: ${error.message}`;
+                if (!response.ok) {
+                    throw new Error(`API 请求失败: ${response.status}`);
+                }
+
+                data = await response.json();
+                console.log('Bangumi API 响应:', data); // 调试用
+                searchSuccessful = true;
+                break;
+
+            } catch (error) {
+                console.error('搜索请求失败:', error.message);
+                
+                // 如果是第一次尝试且服务器未运行，等待服务器启动后重试
+                if (attempt === 0 && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError')) {
+                    console.log('服务器未运行，尝试启动...');
+                    this.showNotification('正在启动服务器，请稍候...', 'info');
+                    
+                    // 等待服务器启动
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    continue;
+                }
+                
+                // 第二次尝试失败，显示错误
+                throw error;
             }
-            searchResults.innerHTML = `<div class="bangumi-search-error">${errorMessage}</div>`;
-            this.showNotification(errorMessage, 'error');
-        } finally {
-            // 恢复按钮状态
+        }
+
+        if (!searchSuccessful || !data) {
+            searchResults.innerHTML = '<div class="bangumi-search-error">搜索失败，请检查网络连接后重试</div>';
             searchBtn.disabled = false;
             searchBtn.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
+            return;
         }
+
+        // 清空之前的结果
+        searchResults.innerHTML = '';
+
+        // 检查 API 返回的数据结构
+        let items = [];
+        if (Array.isArray(data)) {
+            items = data;
+        } else if (data.data && Array.isArray(data.data)) {
+            items = data.data;
+        } else if (data.list && Array.isArray(data.list)) {
+            items = data.list;
+        } else {
+            console.log('未知的响应格式:', data);
+        }
+
+        if (items.length === 0) {
+            searchResults.innerHTML = '<div class="bangumi-search-empty">未找到相关游戏</div>';
+            return;
+        }
+
+        // 渲染搜索结果
+        items.forEach(subject => {
+            const item = document.createElement('div');
+            item.className = 'bangumi-search-item';
+
+            // 获取封面图片
+            const coverImage = subject.images?.common || subject.images?.large || '';
+            const name = subject.name_cn || subject.name || '未知游戏';
+            const nameCn = subject.name_cn && subject.name ? subject.name : '';
+
+            item.innerHTML = `
+                ${coverImage ? `<img src="${coverImage}" alt="${name}" onerror="this.style.display='none'">` : '<div style="width:50px;height:70px;background:#e2e8f0;border-radius:4px;"></div>'}
+                <div class="bangumi-search-item-info">
+                    <div class="bangumi-search-item-name">${this.escapeHtml(name)}</div>
+                    ${nameCn ? `<div class="bangumi-search-item-name-cn">${this.escapeHtml(nameCn)}</div>` : ''}
+                </div>
+            `;
+
+            // 点击选择结果
+            item.addEventListener('click', () => {
+                this.selectBangumiResult(subject);
+            });
+
+            searchResults.appendChild(item);
+        });
+
+        // 恢复按钮状态
+        searchBtn.disabled = false;
+        searchBtn.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
     }
 
     selectBangumiResult(subject) {
