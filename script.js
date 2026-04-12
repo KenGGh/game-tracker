@@ -638,7 +638,7 @@ class GameTracker {
         imageEditor.src = sourceToUse;
         imageEditor.onload = () => {
             cropper = new Cropper(imageEditor, {
-                aspectRatio: 16/9, // 设置为16:9的比例
+                aspectRatio: 1, // 设置为 1:1 正方形比例
                 viewMode: 2, // 限制裁剪框不超出图片的范围
                 dragMode: 'move', // 默认移动模式
                 autoCropArea: 0.8, // 自动裁剪区域大小
