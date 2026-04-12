@@ -172,13 +172,16 @@ class GameTracker {
                     const centerX = rect.width / 2;
                     const centerY = rect.height / 2;
                     // 光源在左上方，鼠标移动时计算卡片倾斜和亮度变化
-                    // rotateX: 鼠标在上为负(向上倾斜)，在下为正(向下倾斜)
-                    // rotateY: 鼠标在左为正(向左倾斜)，在右为负(向右倾斜)
-                    const rotateX = (y - centerY) / 20;
-                    const rotateY = (centerX - x) / 20;
+
+                    const rotateX = -(y - centerY) / 20;
+                    const rotateY = -(centerX - x) / 20;
+                    
+
+                    const translateX = (centerX - x) / 50;
+                    const translateY = (centerY - y) / 50;
                     
                     card.classList.add('tilt');
-                    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+                    card.style.transform = `perspective(1000px) translateX(${-translateX}px) translateY(${-translateY}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
                     
                     // 反光效果：朝向左上光源时变亮，朝向右下阴影时变暗
                     // rotateX<0（鼠标在上）+ rotateY>0（鼠标在左）= 左上 = 更亮
