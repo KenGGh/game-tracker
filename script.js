@@ -1426,9 +1426,9 @@ class GameTracker {
                 // 记录实际颜色供插件使用
                 cellColor: color,
                 maxBarThickness: 200,
-                barThickness: 128,
+                barThickness: 'flex',
                 barPercentage: 1,
-                categoryPercentage: 1,
+                categoryPercentage: 0.9,
                 completionDate: game.completionDate
             });
         }
