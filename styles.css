@@ -803,9 +803,9 @@ body {
     background-position: center center;
     background-repeat: no-repeat;
     /* 对图片进行模糊、降低饱和度、增大亮度、降低对比度 */
-    filter: blur(4px) saturate(0.5) brightness(1) contrast(50%);
+    filter: blur(6px) saturate(0.3) brightness(1.5) contrast(80%);
     /* 使用 multiply 混合模式让背景融入平台色 */
-    mix-blend-mode: overlay;
+    mix-blend-mode:overlay;
     /* 确保伪元素在平台色背景之上 */
     pointer-events: none;
 }
@@ -822,7 +822,7 @@ body {
 
 /* 标题栏和底部信息栏的半透明背景可以遮挡模糊背景 */
 .card-top, .card-bottom {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 1);
 }
 
 .game-card.tilt {
@@ -843,9 +843,9 @@ body {
 .card-top {
     padding: 8px 12px;
     margin: 6px;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.6);
     text-align: left;
-    border: 2px solid rgba(0, 0, 0, 0.4);
+    border: 5px solid rgba(0, 0, 0, 1);
     border-radius: 8px;
     height: 60px;
     overflow: hidden;
@@ -857,7 +857,7 @@ body {
 .card-title {
     color: white;
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 1.2rem;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
     display: block;
     white-space: nowrap;
@@ -884,13 +884,13 @@ body {
     margin: 0;
     text-align: center;
     height: 24px;
-    margin-top: 0px;
+    margin-top: -2px;
     margin-bottom: 2px;
 }
 
 .card-rating {
-    font-size: 1.2rem;
-    letter-spacing: 1px;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
     color: #ffd700;
     -webkit-text-stroke: 1px #000;
     text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
@@ -902,7 +902,7 @@ body {
     margin: 8px 10px;
     background: rgba(255, 255, 255, 0.1);
     min-height: 20px;
-    border: 2px solid rgba(0, 0, 0, 0.4);
+    border: 5px solid rgba(0, 0, 0, 0.8);
     border-radius: 8px;
     height: 200px;
     overflow: hidden;
@@ -931,19 +931,19 @@ body {
 .card-bottom {
     padding: 8px 12px;
     margin: 6px;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(235, 235, 235, 0.9);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    border: 2px solid rgba(0, 0, 0, 0.4);
+    border: 5px solid rgba(0, 0, 0, 1);
     border-radius: 8px;
     height: 110px;
 }
 
 /* 平台 - 固定靠左上 */
 .card-info-line {
-    color: white;
-    font-size: 0.85rem;
+    color: rgb(0, 0, 0);
+    font-size: 0.9rem;
     line-height: 1.4;
     width: 100%;
 }
@@ -955,9 +955,10 @@ body {
 
 /* 一句话评价 - 有两行的位置 */
 .card-comment-line {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(0, 0, 0, 0.9);
     font-style: normal;
     text-align: left;
+    font-size: 0.8rem;
     padding: 0 2px;
     flex: 1;
     overflow: hidden;
@@ -976,7 +977,7 @@ body {
     padding-bottom: 2px;
     border-top: 1px solid rgba(0, 0, 0, 0.5);
     margin-top: auto;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
 }
 
 /* 全成就/白金徽章样式 */
