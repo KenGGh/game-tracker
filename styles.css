@@ -780,6 +780,23 @@ body {
     overflow: hidden;
     justify-self: center;
     background: white;
+    transition: box-shadow 0.3s ease;
+    transform-style: preserve-3d;
+    position: relative;
+}
+
+.game-card.tilt {
+    transition: transform 0.05s ease;
+}
+
+.game-card:not(.tilt) {
+    transition: transform 0.3s ease;
+}
+
+/* 卡片光效 - 光从左上方打下来 */
+.game-card {
+    box-shadow: 15px 15px 30px rgba(0,0,0,0.5);
+    transition: all 0.15s ease;
 }
 
 /* 卡片顶部 - 标题栏 */
