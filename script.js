@@ -1585,66 +1585,76 @@ class GameTracker {
     }
 
     async createGameCard(game) {
-        let coverImage = '';
-        
-        // 优先使用新的imageId系统
-        if (game.imageId) {
-            const imageData = await this.getImage(game.imageId);
-            if (imageData) {
-                coverImage = `<img src="${imageData}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
-            } else {
-                // 如果imageId存在但获取不到图片，尝试使用旧的cover字段
-                if (game.cover) {
-                    coverImage = `<img src="${this.escapeHtml(game.cover)}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
-                } else {
-                    coverImage = `<div class="game-cover-placeholder">
-                        <i class="fas fa-gamepad"></i>
-                    </div>`;
-                }
-            }
-        } else if (game.cover) {
-            // 如果没有imageId但有旧的cover字段，直接使用
-            coverImage = `<img src="${this.escapeHtml(game.cover)}" alt="${this.escapeHtml(game.name)}" class="game-cover">`;
-        } else {
-            // 没有任何封面数据
-            coverImage = `<div class="game-cover-placeholder">
-                <i class="fas fa-gamepad"></i>
-            </div>`;
-        }
-
+        // 获取平台颜色
         const platformClass = this.getPlatformClass(game.platform);
         const platform = this.platforms.find(p => p.id === platformClass);
-        const platformBadge = game.platform ? 
-            `<div class="game-platform-badge" style="background: ${platform ? platform.color : '#718096'}">${this.escapeHtml(game.platform)}</div>` : '';
-
+        // 背景使用平台色，边框使用黑色
+        const borderColor = '#1a1a1a';
+        const bgColor = platform ? platform.color : '#4a5568';
+        
+        // 生成星级评分显示（只显示实心星，无评分不显示）
+        const renderRating = () => {
+            if (!game.rating) return '<span class="card-rating">&nbsp;</span>';
+            const stars = '★'.repeat(game.rating);
+            return `<span class="card-rating">${stars}</span>`;
+        };
+        
+        // 获取封面图片
+        let coverHtml = '';
+        const editKey = game.id || 'new';
+        
+        // 1. 优先使用内存中的 objectURL（新上传的图片）
+        if (this._objectUrlMap && this._objectUrlMap[editKey]) {
+            coverHtml = `<img src="${this._objectUrlMap[editKey]}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+        } else if (this.originalImages && this.originalImages[editKey]) {
+            const objectUrl = URL.createObjectURL(this.originalImages[editKey]);
+            coverHtml = `<img src="${objectUrl}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+        } 
+        // 2. 旧的 cover 字段（dataURL，直接可用）
+        else if (game.cover) {
+            coverHtml = `<img src="${game.cover}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+        }
+        // 3. imageId - 异步获取数据库图片
+        else if (game.imageId) {
+            // 先设置一个占位符，然后异步获取
+            coverHtml = `<div class="card-cover-loading" data-image-id="${game.imageId}" style="width:100%;height:100%;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;border-radius:4px;"><span style="color:rgba(255,255,255,0.5);">加载中...</span></div>`;
+            // 异步获取图片
+            (async () => {
+                try {
+                    const imageData = await this.getImage(game.imageId);
+                    if (imageData) {
+                        const cardMiddle = document.querySelector(`.game-card[data-game-id="${game.id}"] .card-middle`);
+                        if (cardMiddle) {
+                            cardMiddle.innerHTML = `<img src="${imageData}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('获取封面图片失败:', e);
+                }
+            })();
+        }
+        
+        // 简化的竖向卡牌 - 分成上中下三部分
         return `
-            <div class="game-card" data-game-id="${game.id}" onclick="gameTracker.handleCardClick(event, ${game.id})">
-                <div class="game-card-header">
-                    ${coverImage}
-                    ${platformBadge}
+            <div class="game-card" 
+                 data-game-id="${game.id}" 
+                 onclick="gameTracker.handleCardClick(event, ${game.id})"
+                 style="border-color: ${borderColor}; background: ${bgColor};">
+                <div class="card-top">
+                    <span class="card-title">${this.escapeHtml(game.name)}</span>
+                    ${game.originalName ? `<span class="card-original-title">${this.escapeHtml(game.originalName)}</span>` : ''}
+                </div>
+                <div class="card-rating-bar">
+                    ${renderRating()}
+                </div>
+                <div class="card-middle">
+                    ${coverHtml}
                     ${game.fullAchievements ? `<div class="achievement-overlay" aria-hidden="true"><i class="fas fa-trophy"></i></div>` : ''}
                 </div>
-                
-                <div class="game-card-content">
-                    <div class="game-title">${this.escapeHtml(game.name)}</div>
-                    ${game.originalName ? `<div class="game-original-name">${this.escapeHtml(game.originalName)}</div>` : ''}
-                    
-                    <div class="game-meta">
-                        ${game.completionDate ? `
-                            <div class="game-completion-date">
-                                <i class="fas fa-calendar-check"></i>
-                                <span>通关日期：${new Date(game.completionDate).toLocaleDateString('zh-CN')}</span>
-                            </div>
-                        ` : ''}
-                        ${game.rating ? `
-                            <div class="game-rating">
-                                <i class="fas fa-heart"></i>
-                                <span>喜爱度: ${'❤️'.repeat(game.rating)}${'🤍'.repeat(10-game.rating)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                    
-                    ${game.comment ? `<div class="game-comment">${this.escapeHtml(game.comment)}</div>` : ''}
+                <div class="card-bottom">
+                    <div class="card-info-line card-platform-line">[${this.escapeHtml(game.platform || '')}]</div>
+                    ${game.comment ? `<div class="card-info-line card-comment-line">${this.escapeHtml(game.comment)}</div>` : ''}
+                    ${game.completionDate ? `<div class="card-info-line card-date-line">通关时间：${(() => { const d = new Date(game.completionDate); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; })()}</div>` : ''}
                 </div>
             </div>
         `;

@@ -712,51 +712,50 @@ body {
 
 .games-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 20px;
 }
 
 /* 年度柱状图容器 */
 .year-chart {
     width: 100%;
-    /* 高度由脚本按每格高度动态设置 */
     margin: 10px 0 20px 0;
 }
 
-/* 响应式布局 - 根据屏幕宽度调整每行显示数量 */
+/* 响应式布局 */
 @media (max-width: 1600px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     }
 }
 
 @media (max-width: 1400px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     }
 }
 
 @media (max-width: 1200px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
 }
 
 @media (max-width: 992px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
 }
 
 @media (max-width: 768px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     }
 }
 
 @media (max-width: 576px) {
     .games-grid {
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 }
 
@@ -767,131 +766,163 @@ body {
     }
 }
 
+/* ========== TCG卡牌风格卡片样式 ========== */
+
+/* 主卡片容器 - 竖向银行卡比例 */
 .game-card {
-    background: white;
-    border-radius: 15px;
-    overflow: hidden;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
-    border: 2px solid transparent;
-    min-height: 280px;
+    border: 8px solid;
+    border-radius: 16px;
+    width: 320px;
+    height: 500px;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
-    cursor: pointer;
-    position: relative;
-}
-
-.game-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
-    border-color: #667eea;
-}
-
-.game-card::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(102, 126, 234, 0.05);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-}
-
-.game-card:hover::after {
-    opacity: 1;
-}
-
-.game-card-header {
-    position: relative;
-    height: 240px;
     overflow: hidden;
-    background: #1a202c;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.edit-cover-btn {
-    position: absolute;
-    top: 45px;
-    right: 10px;
-    z-index: 30;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-    color: #1a202c;
-    border: none;
-    opacity: 0;
-    transition: all 0.3s ease;
-}
-
-.game-card:hover .edit-cover-btn {
-    opacity: 1;
-}
-
-.edit-cover-btn:hover {
+    justify-self: center;
     background: white;
-    transform: scale(1.1);
 }
 
-.game-cover {
-    width: 100%;
-    height: calc(100% - 35px);
-    object-fit: cover;
-    transition: transform 0.3s ease;
-    margin-top: 35px;
-    background: #1a202c;
+/* 卡片顶部 - 标题栏 */
+.card-top {
+    padding: 8px 12px;
+    margin: 6px;
+    background: rgba(0, 0, 0, 0.4);
+    text-align: left;
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    height: 60px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
-.game-card:hover .game-cover {
-    transform: scale(1.05);
+.card-title {
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
 }
 
-.game-cover-placeholder {
+.card-original-title {
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 400;
+    font-size: 0.7rem;
+    display: block;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+/* 卡片喜爱度评分栏 */
+.card-rating-bar {
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    height: 24px;
+    margin-top: -8px;
+    margin-bottom: 2px;
+}
+
+.card-rating {
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    color: #ffd700;
+    -webkit-text-stroke: 1px #000;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+}
+
+/* 卡片中部 - 图片区域 */
+.card-middle {
+    flex: 1;
+    margin: 8px 10px;
+    background: rgba(255, 255, 255, 0.1);
+    min-height: 20px;
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    height: 200px;
+    overflow: hidden;
+    position: relative;
+}
+
+.card-middle img {
     width: 100%;
     height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #1a202c;
-    color: white;
-    font-size: 3rem;
-    opacity: 0.8;
-    margin-top: 35px;
+    object-fit: cover;
 }
 
-/* 全成就覆盖徽章（封面右下角） */
-.game-card-header {
-    position: relative; /* 确保覆盖层可定位 */
+/* 卡片底部 - 信息栏 */
+.card-bottom {
+    padding: 8px 12px;
+    margin: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    height: 110px;
 }
+
+/* 平台 - 固定靠左上 */
+.card-info-line {
+    color: white;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    width: 100%;
+}
+
+.card-platform-line {
+    text-align: left;
+    margin-left: 2px;
+}
+
+/* 一句话评价 - 有两行的位置 */
+.card-comment-line {
+    color: rgba(255, 255, 255, 0.9);
+    font-style: normal;
+    text-align: left;
+    padding: 0 20px;
+    flex: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.5;
+    line-clamp: 2;
+}
+
+/* 分割线和通关时间 - 固定靠下 */
+.card-date-line {
+    width: 100%;
+    text-align: right;
+    padding-top: 6px;
+    padding-bottom: 2px;
+    border-top: 1px solid rgba(0, 0, 0, 0.5);
+    margin-top: auto;
+    font-size: 0.7rem;
+}
+
+/* 全成就/白金徽章样式 */
 .achievement-overlay {
     position: absolute;
     right: 10px;
     bottom: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent; /* 只显示图标，无背景 */
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    padding: 0;
-    z-index: 20;
+    z-index: 10;
+    pointer-events: none;
 }
+
 .achievement-overlay i {
-    color: #ffc400; /* 银灰色奖杯 */
-    font-size: 30px;
-    /* 深色描边：优先使用浏览器支持的 text-stroke（webkit），再使用多向 text-shadow 作为降级兼容
-       这样在不支持 text-stroke 的浏览器也能看到明显描边 */
-    text-shadow:
+    font-size: 28px;
+    color: #ffd700;
+    text-shadow: 
         -2px -2px 0 #121314,
         2px -2px 0 #121314,
         -2px 2px 0 #121314,
@@ -902,68 +933,7 @@ body {
         0px -2px 0 #121314;
 }
 
-/* 在小屏幕上缩小徽章 */
-@media (max-width: 768px) {
-    .achievement-overlay {
-        width: 36px;
-        height: 36px;
-    }
-    .achievement-overlay i { font-size: 16px; }
-}
-
-.game-card-content {
-    padding: 8px 12px 6px 12px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.game-platform-badge {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    padding: 8px 15px;
-    color: white;
-    font-size: 0.9rem;
-    font-weight: 650;
-    z-index: 10;
-    backdrop-filter: blur(10px);
-    text-align: center;
-    border-radius: 0;
-    letter-spacing: 0.3px;
-    text-shadow: 0 1px 1px rgba(0,0,0,0.1);
-}
-
-.game-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #2d3748;
-    margin-bottom: 4px;
-    line-height: 1.3;
-}
-
-.game-original-name {
-    font-size: 0.75rem;
-    color: #a0aec0;
-    font-style: italic;
-    margin-bottom: 6px;
-    line-height: 1.2;
-}
-
-.game-comment {
-    font-size: 0.8rem;
-    color: #4a5568;
-    font-style: italic;
-    margin-bottom: 8px;
-    line-height: 1.3;
-    padding: 4px 8px;
-    background: #f7fafc;
-    border-radius: 4px;
-    border-left: 3px solid #667eea;
-}
-
-/* 添加游戏卡片样式 */
+/* ========== 添加游戏卡片样式 ========== */
 .add-game-card {
     background: #f7fafc;
     border-radius: 15px;
@@ -971,12 +941,14 @@ body {
     box-shadow: 0 5px 20px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
     border: 2px dashed #e2e8f0;
-    min-height: 280px;
+    min-height: 500px;
     display: flex;
     flex-direction: column;
     cursor: pointer;
     position: relative;
     color: #718096;
+    width: 320px;
+    justify-self: center;
 }
 
 .add-game-card:hover {
@@ -1009,43 +981,7 @@ body {
     opacity: 0.9;
 }
 
-.game-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-bottom: 6px;
-    flex: 1;
-}
-
-.game-completion-date {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.75rem;
-    color: #718096;
-}
-
-.game-completion-date i {
-    color: #667eea;
-    width: 12px;
-}
-
-.game-rating {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.75rem;
-    color: #718096;
-    margin-top: 5px;
-}
-
-.game-rating i {
-    color: #e53e3e;
-    width: 12px;
-}
-
-/* 旧的 .game-achievement 样式已移除，使用覆盖层 .achievement-overlay 显示在封面右下角 */
-
+/* 响应式 - 小屏幕 */
 @media (max-width: 768px) {
     .container {
         padding: 15px;
@@ -1059,8 +995,14 @@ body {
         grid-template-columns: 1fr;
     }
     
-    .game-card-header {
-        height: 150px;
+    .game-card {
+        width: 280px;
+        height: 450px;
+    }
+    
+    .add-game-card {
+        width: 280px;
+        min-height: 450px;
     }
     
     .form-actions {
