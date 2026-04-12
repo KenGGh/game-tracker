@@ -785,6 +785,44 @@ body {
     transition: box-shadow 0.3s ease;
     transform-style: preserve-3d;
     position: relative;
+    /* 背景叠加效果 */
+    background-blend-mode: overlay;
+}
+
+/* 封面背景样式 - 使用伪元素作为底层背景层 */
+.game-card.has-background::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    background-image: var(--bg-image);
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    /* 对图片进行模糊、降低饱和度、增大亮度、降低对比度 */
+    filter: blur(4px) saturate(0.5) brightness(1) contrast(50%);
+    /* 使用 multiply 混合模式让背景融入平台色 */
+    mix-blend-mode: overlay;
+    /* 确保伪元素在平台色背景之上 */
+    pointer-events: none;
+}
+
+.game-card.has-background {
+    position: relative;
+}
+
+/* 确保内容层在模糊背景之上 */
+.game-card.has-background > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* 标题栏和底部信息栏的半透明背景可以遮挡模糊背景 */
+.card-top, .card-bottom {
+    background: rgba(0, 0, 0, 0.4);
 }
 
 .game-card.tilt {
@@ -846,7 +884,7 @@ body {
     margin: 0;
     text-align: center;
     height: 24px;
-    margin-top: -8px;
+    margin-top: 0px;
     margin-bottom: 2px;
 }
 

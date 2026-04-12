@@ -1630,41 +1630,48 @@ class GameTracker {
         // 背景使用平台色，边框使用黑色
         const borderColor = '#1a1a1a';
         const bgColor = platform ? platform.color : '#4a5568';
-        
-        // 生成星级评分显示（只显示实心星，无评分不显示）
+
+        // 生成星级评分显示（只显示实心，没评分不显示）
         const renderRating = () => {
             if (!game.rating) return '<span class="card-rating">&nbsp;</span>';
-            const stars = '★'.repeat(game.rating);
+            const stars = '❤'.repeat(game.rating);
             return `<span class="card-rating">${stars}</span>`;
         };
-        
-        // 获取封面图片
+
+        // 获取封面图片 - 用于背景和主图
         let coverHtml = '';
+        let coverBgStyle = '';
+        let coverData = null;
         const editKey = game.id || 'new';
-        
-        // 1. 优先使用内存中的 objectURL（新上传的图片）
+
+        // 1. 优先使用内存中的 objectURL（新增上传的图片）
         if (this._objectUrlMap && this._objectUrlMap[editKey]) {
-            coverHtml = `<img src="${this._objectUrlMap[editKey]}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+            coverData = this._objectUrlMap[editKey];
         } else if (this.originalImages && this.originalImages[editKey]) {
-            const objectUrl = URL.createObjectURL(this.originalImages[editKey]);
-            coverHtml = `<img src="${objectUrl}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
-        } 
+            coverData = URL.createObjectURL(this.originalImages[editKey]);
+        }
         // 2. 旧的 cover 字段（dataURL，直接可用）
         else if (game.cover) {
-            coverHtml = `<img src="${game.cover}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+            coverData = game.cover;
         }
         // 3. imageId - 异步获取数据库图片
         else if (game.imageId) {
-            // 先设置一个占位符，然后异步获取
+            // 先设置占位符
             coverHtml = `<div class="card-cover-loading" data-image-id="${game.imageId}" style="width:100%;height:100%;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;border-radius:4px;"><span style="color:rgba(255,255,255,0.5);">加载中...</span></div>`;
-            // 异步获取图片
+            // 异步获取图片并设置背景
             (async () => {
                 try {
                     const imageData = await this.getImage(game.imageId);
                     if (imageData) {
-                        const cardMiddle = document.querySelector(`.game-card[data-game-id="${game.id}"] .card-middle`);
+                        const card = document.querySelector(`.game-card[data-game-id="${game.id}"]`);
+                        const cardMiddle = card ? card.querySelector('.card-middle') : null;
                         if (cardMiddle) {
                             cardMiddle.innerHTML = `<img src="${imageData}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+                        }
+                        if (card) {
+                            // 添加背景类和设置背景图片（通过CSS变量设置伪元素背景）
+                            card.classList.add('has-background');
+                            card.style.setProperty('--bg-image', `url('${imageData}')`);
                         }
                     }
                 } catch (e) {
@@ -1672,13 +1679,21 @@ class GameTracker {
                 }
             })();
         }
-        
-        // 简化的竖向卡牌 - 分成上中下三部分
+
+        // 判断是否有背景图片
+        const hasBgClass = coverData ? 'has-background' : '';
+
+        // 如果有封面数据，设置背景样式（通过CSS变量设置伪元素背景）
+        if (coverData) {
+            coverHtml = `<img src="${coverData}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+        }
+
+        // 简化的纵向卡牌 - 分成上中下三部分
         return `
-            <div class="game-card" 
-                 data-game-id="${game.id}" 
+            <div class="game-card ${hasBgClass}"
+                 data-game-id="${game.id}"
                  onclick="gameTracker.handleCardClick(event, ${game.id})"
-                 style="border-color: ${borderColor}; background: ${bgColor};">
+                 style="--bg-image: url('${coverData || ''}'); border-color: ${borderColor}; background: ${bgColor};">
                 <div class="card-top">
                     <span class="card-title">${this.escapeHtml(game.name)}</span>
                     ${game.originalName ? `<span class="card-original-title">${this.escapeHtml(game.originalName)}</span>` : ''}
