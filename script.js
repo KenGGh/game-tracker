@@ -299,16 +299,16 @@ class GameTracker {
         const gameCommentInput = document.getElementById('gameComment');
         gameCommentInput.addEventListener('input', (e) => {
             const length = e.target.value.length;
-            const maxLength = 20;
+            const maxLength = 40;
             const remaining = maxLength - length;
             
             // 更新帮助文本
             const helpText = e.target.parentNode.querySelector('.form-help');
             if (helpText) {
                 if (remaining >= 0) {
-                    helpText.textContent = `可选：不超过20个字的简短评论（还可输入${remaining}个字符）`;
+                    helpText.textContent = `可选：不超过40个字的简短评论（还可输入${remaining}个字符）`;
                 } else {
-                    helpText.textContent = `可选：不超过20个字的简短评论（超出${Math.abs(remaining)}个字符）`;
+                    helpText.textContent = `可选：不超过40个字的简短评论（超出${Math.abs(remaining)}个字符）`;
                 }
             }
         });
@@ -917,9 +917,9 @@ class GameTracker {
             return;
         }
 
-        // 验证评论长度（不超过20个中文字）
-        if (gameComment && gameComment.length > 20) {
-            alert('评论不能超过20个字符！');
+        // 验证评论长度（不超过40个中文字）
+        if (gameComment && gameComment.length > 40) {
+            alert('评论不能超过40个字符！');
             return;
         }
 
