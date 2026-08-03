@@ -362,6 +362,10 @@ class GameTracker {
         // 设置模态框事件
         document.getElementById('closeSettingsModal').addEventListener('click', () => this.closeSettingsModal());
 
+        // 代理配置按钮
+        document.getElementById('saveProxyBtn').addEventListener('click', () => this.saveProxyConfig());
+        document.getElementById('testProxyBtn').addEventListener('click', () => this.testProxyConfig());
+
         // 点击模态框背景关闭（避免拖拽触发误关闭）
         const addGameModal = document.getElementById('addGameModal');
         addGameModal.addEventListener('mousedown', (e) => {
@@ -1984,6 +1988,70 @@ class GameTracker {
         document.getElementById('settingsModal').classList.add('show');
         document.body.style.overflow = 'hidden';
         this.renderPlatformList();
+        this.loadProxyConfig();
+    }
+
+    async loadProxyConfig() {
+        try {
+            const r = await fetch('http://localhost:3000/api/proxy/config');
+            if (!r.ok) return;
+            const data = await r.json();
+            document.getElementById('proxyEnabled').checked = !!data.enabled;
+            document.getElementById('proxyHost').value = data.host || '';
+            document.getElementById('proxyPort').value = data.port || '';
+        } catch (e) {
+            console.warn('加载代理配置失败：', e);
+        }
+    }
+
+    async saveProxyConfig() {
+        const enabled = document.getElementById('proxyEnabled').checked;
+        const host = document.getElementById('proxyHost').value.trim();
+        const port = document.getElementById('proxyPort').value.trim();
+        if (enabled && (!host || !port)) {
+            this.showNotification('启用代理时必须填写地址和端口', 'error');
+            return;
+        }
+        try {
+            const r = await fetch('http://localhost:3000/api/proxy/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled, host, port })
+            });
+            const data = await r.json();
+            if (!r.ok) {
+                this.showNotification('保存失败：' + (data.error || r.status), 'error');
+                return;
+            }
+            this.showNotification(enabled ? `已启用代理 ${host}:${port}` : '代理已关闭', 'success');
+        } catch (e) {
+            this.showNotification('保存代理配置失败：' + e.message, 'error');
+        }
+    }
+
+    async testProxyConfig() {
+        const resultEl = document.getElementById('proxyTestResult');
+        resultEl.textContent = '测试中...';
+        resultEl.style.color = '#4a5568';
+        try {
+            const r = await fetch('http://localhost:3000/api/proxy/test', { method: 'POST' });
+            const data = await r.json();
+            const lines = [];
+            if (data.direct) {
+                lines.push(`直连：${data.direct.ok ? `成功 (HTTP ${data.direct.status})` : '失败：' + (data.direct.error || 'HTTP ' + data.direct.status)}`);
+            }
+            if (data.proxy) {
+                lines.push(`代理：${data.proxy.ok ? `成功 (HTTP ${data.proxy.status})` : '失败：' + (data.proxy.error || 'HTTP ' + data.proxy.status)}`);
+            } else {
+                lines.push('代理：未启用');
+            }
+            resultEl.innerHTML = lines.join('<br>');
+            const allOk = (!data.proxy || data.proxy.ok);
+            resultEl.style.color = allOk ? '#48bb78' : '#e53e3e';
+        } catch (e) {
+            resultEl.textContent = '测试失败：' + e.message;
+            resultEl.style.color = '#e53e3e';
+        }
     }
 
     closeSettingsModal() {

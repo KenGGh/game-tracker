@@ -263,6 +263,32 @@
                     </div>
                 </div>
                 <div class="settings-section">
+                    <h3><i class="fas fa-network-wired"></i> 代理设置（Bangumi 搜索）</h3>
+                    <div class="form-group">
+                        <label style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="proxyEnabled">
+                            <span>启用代理</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="proxyHost">代理地址</label>
+                        <input type="text" id="proxyHost" class="settings-input" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxyPort">代理端口</label>
+                        <input type="text" id="proxyPort" class="settings-input" placeholder="7890">
+                    </div>
+                    <div class="form-group" style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-primary" id="saveProxyBtn" aria-label="保存代理配置" title="保存代理配置">
+                            <i class="fas fa-save" aria-hidden="true"></i> 保存
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="testProxyBtn" aria-label="测试代理连接" title="测试代理连接">
+                            <i class="fas fa-plug" aria-hidden="true"></i> 测试连接
+                        </button>
+                    </div>
+                    <div id="proxyTestResult" style="font-size: 0.85rem; color: #4a5568;"></div>
+                </div>
+                <div class="settings-section">
                     <h3><i class="fas fa-gamepad"></i> 平台管理</h3>
                     <div class="platform-list" id="platformList">
                         <!-- 平台列表将动态生成 -->
