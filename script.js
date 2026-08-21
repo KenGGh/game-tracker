@@ -1204,6 +1204,97 @@ class GameTracker {
         return 'other';
     }
 
+    /**
+     * 粗略判断颜色亮度（返回 true 表示偏亮）
+     * 支持 #rrggbb / #rgb 格式
+     */
+    isLightColor(hex) {
+        if (!hex || typeof hex !== 'string') return false;
+        let h = hex.trim().replace('#', '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        if (h.length !== 6 || /[^0-9a-f]/i.test(h)) return false;
+        const r = parseInt(h.slice(0, 2), 16);
+        const g = parseInt(h.slice(2, 4), 16);
+        const b = parseInt(h.slice(4, 6), 16);
+        // 标准亮度公式
+        const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+        return yiq >= 160;
+    }
+
+    /**
+     * 在一个年份内部，根据 sortBy 决定是否再分组。
+     * - completionDate：返回单组（不分组）
+     * - platform：按平台名分组
+     * - rating：按喜爱度分组（10..1 + 无评分）
+     * 组内顺序按通关时间和 sortOrder 决定。
+     */
+    buildInnerGroups(yearGames) {
+        const sortBy = this.sortBy;
+        const byTime = (a, b) => {
+            const ta = a.completionDate ? new Date(a.completionDate).getTime() : 0;
+            const tb = b.completionDate ? new Date(b.completionDate).getTime() : 0;
+            return this.sortOrder === 'asc' ? ta - tb : tb - ta;
+        };
+
+        if (sortBy === 'platform') {
+            const map = new Map();
+            for (const g of yearGames) {
+                const key = (g.platform || '未分类').trim() || '未分类';
+                if (!map.has(key)) map.set(key, []);
+                map.get(key).push(g);
+            }
+            // 平台顺序：先按 this.platforms 配置顺序，再追加未在配置里的平台
+            const orderedKeys = [];
+            const seen = new Set();
+            for (const p of this.platforms) {
+                if (map.has(p.name)) { orderedKeys.push(p.name); seen.add(p.name); }
+            }
+            for (const k of map.keys()) {
+                if (!seen.has(k)) orderedKeys.push(k);
+            }
+            return orderedKeys.map(key => {
+                const platform = this.platforms.find(p => p.name === key);
+                return {
+                    key,
+                    label: key,
+                    color: platform ? platform.color : null,
+                    games: map.get(key).slice().sort(byTime)
+                };
+            });
+        }
+
+        if (sortBy === 'rating') {
+            // 固定顺序：10,9,8,7,6,5,4,3,2,1,无评分
+            // 颜色：10❤ 粉红、9❤ 粉金、8❤ 粉紫、7❤ 粉蓝、6❤ 粉绿，其余灰；无评分也灰
+            const colorMap = {
+                r10: '#f472b6', // 粉红
+                r9:  '#fbbf24', // 粉金
+                r8:  '#c084fc', // 粉紫
+                r7:  '#93c5fd', // 粉蓝
+                r6:  '#86efac', // 粉绿
+                r5:  '#cbd5e0',
+                r4:  '#cbd5e0',
+                r3:  '#cbd5e0',
+                r2:  '#cbd5e0',
+                r1:  '#cbd5e0',
+                none:'#cbd5e0'
+            };
+            const buckets = new Map();
+            const order = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+            for (const r of order) buckets.set(`r${r}`, { key: `r${r}`, label: `${r} ❤`, color: colorMap[`r${r}`], games: [] });
+            buckets.set('none', { key: 'none', label: '无评分', color: colorMap.none, games: [] });
+            for (const g of yearGames) {
+                const r = g.rating ? parseInt(g.rating) : 0;
+                const k = (r >= 1 && r <= 10) ? `r${r}` : 'none';
+                buckets.get(k).games.push(g);
+            }
+            return Array.from(buckets.values()).filter(b => b.games.length > 0);
+        }
+
+        // completionDate 或其他：单组
+        return [{ key: '_all', label: '', games: yearGames.slice().sort(byTime) }];
+    }
+
     async renderGames() {
         const gamesList = document.getElementById('gamesList');
 
@@ -1248,12 +1339,14 @@ class GameTracker {
         const sortedYears = Object.keys(gamesByYear).sort((a, b) => b - a);
         
         let html = '';
-        
-        // 渲染有通关日期的游戏（按年份分组）
+
+        // 渲染有通关日期的游戏（按年份分组，年份内可能再按平台/喜爱度分组）
         for (const year of sortedYears) {
             const yearGames = gamesByYear[year];
-            const gameCards = await Promise.all(yearGames.map(game => this.createGameCard(game)));
-            
+
+            // 根据 sortBy 决定是否在年份内再次分组
+            const innerGroups = this.buildInnerGroups(yearGames);
+
             html += `
                 <div class="year-section" data-year="${year}">
                     <div class="year-title">
@@ -1264,8 +1357,46 @@ class GameTracker {
                     <div class="year-chart">
                         <canvas id="monthlyChart-${year}" aria-label="${year} 每月通关柱状图" role="img"></canvas>
                     </div>
-                    <div class="games-grid">
-                        ${gameCards.join('')}
+            `;
+
+            for (const group of innerGroups) {
+                const gameCards = await Promise.all(group.games.map(game => this.createGameCard(game)));
+
+                if (innerGroups.length === 1) {
+                    // 不分组：直接渲染 games-grid
+                    html += `
+                        <div class="games-grid">
+                            ${gameCards.join('')}
+                            <div class="add-game-card" onclick="gameTracker.openModal()" role="button" tabindex="0" aria-label="添加新游戏" title="添加新游戏">
+                                <div class="add-game-content">
+                                    <i class="fas fa-plus" aria-hidden="true"></i>
+                                    <span>添加游戏</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // 分组：每个子组一个小标题 + games-grid
+                    const titleStyle = group.color
+                        ? `background:${group.color}; color:${this.isLightColor(group.color) ? '#1a202c' : '#ffffff'};`
+                        : '';
+                    html += `
+                        <div class="inner-group" data-group="${this.escapeHtml(group.key)}">
+                            <div class="inner-group-title" style="${titleStyle}">
+                                <span>${this.escapeHtml(group.label)}</span>
+                            </div>
+                            <div class="games-grid">
+                                ${gameCards.join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // 「添加游戏」按钮：只在通关时间模式（单组）下放在年份底部；分组模式放到最后一个子组后面
+            if (innerGroups.length > 1) {
+                html += `
+                    <div class="games-grid games-grid-addonly">
                         <div class="add-game-card" onclick="gameTracker.openModal()" role="button" tabindex="0" aria-label="添加新游戏" title="添加新游戏">
                             <div class="add-game-content">
                                 <i class="fas fa-plus" aria-hidden="true"></i>
@@ -1273,14 +1404,16 @@ class GameTracker {
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
+
+            html += `</div>`;
         }
-        
+
         // 渲染没有通关日期的游戏
         if (gamesWithoutDate.length > 0) {
             const gameCards = await Promise.all(gamesWithoutDate.map(game => this.createGameCard(game)));
-            
+
             html += `
                 <div class="year-section">
                     <div class="year-title">
@@ -2364,35 +2497,20 @@ class GameTracker {
     }
 
     sortGames(games) {
+        // 按通关时间排序（按 sortOrder 决定升降）
+        // 平台/喜爱度模式下按平台名或 rating 分组，组内再按时间排（在 renderGames 处理）
+        if (this.sortBy !== 'completionDate') {
+            // 非时间排序模式：这里仅做兜底（renderGames 会接管分组逻辑）
+            return games.sort((a, b) => {
+                const ta = a.completionDate ? new Date(a.completionDate).getTime() : 0;
+                const tb = b.completionDate ? new Date(b.completionDate).getTime() : 0;
+                return this.sortOrder === 'asc' ? ta - tb : tb - ta;
+            });
+        }
         return games.sort((a, b) => {
-            let aValue, bValue;
-            
-                                switch (this.sortBy) {
-                        case 'completionDate':
-                            aValue = a.completionDate ? new Date(a.completionDate).getTime() : 0;
-                            bValue = b.completionDate ? new Date(b.completionDate).getTime() : 0;
-                            break;
-                        case 'platform':
-                            aValue = (a.platform || '').toLowerCase();
-                            bValue = (b.platform || '').toLowerCase();
-                            break;
-                        case 'name':
-                            aValue = (a.name || '').toLowerCase();
-                            bValue = (b.name || '').toLowerCase();
-                            break;
-                        case 'rating':
-                            aValue = a.rating ? parseInt(a.rating) : 0;
-                            bValue = b.rating ? parseInt(b.rating) : 0;
-                            break;
-                        default:
-                            return 0;
-                    }
-            
-            if (this.sortOrder === 'asc') {
-                return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-            } else {
-                return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
-            }
+            const ta = a.completionDate ? new Date(a.completionDate).getTime() : 0;
+            const tb = b.completionDate ? new Date(b.completionDate).getTime() : 0;
+            return this.sortOrder === 'asc' ? ta - tb : tb - ta;
         });
     }
 

@@ -28,19 +28,18 @@
                     <h2><i class="fas fa-list"></i> 游戏记录</h2>
                     <div class="sort-controls">
                         <div class="sort-group">
-                            <label for="sortBy">排序方式：</label>
+                            <label for="sortBy">排序/分类方式：</label>
                             <select id="sortBy" onchange="gameTracker.updateSort()">
-                                <option value="completionDate">通关时间</option>
-                                <option value="platform">平台</option>
-                                <option value="name">游戏名称</option>
-                                <option value="rating">喜爱度</option>
+                                <option value="completionDate">通关时间（排序）</option>
+                                <option value="platform">平台（分类）</option>
+                                <option value="rating">喜爱度（分类）</option>
                             </select>
                         </div>
                         <div class="sort-group">
-                            <label for="sortOrder">排序顺序：</label>
+                            <label for="sortOrder">顺序：</label>
                             <select id="sortOrder" onchange="gameTracker.updateSort()">
-                                <option value="desc">降序（最新/最新添加）</option>
-                                <option value="asc">升序（最早/最早添加）</option>
+                                <option value="desc">降序（最新优先）</option>
+                                <option value="asc">升序（最早优先）</option>
                             </select>
                         </div>
                         <div class="data-controls">

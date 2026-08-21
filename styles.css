@@ -718,6 +718,41 @@ body {
     gap: 20px;
 }
 
+/* 年份内二次分组（按平台/喜爱度分类时） */
+.inner-group {
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: rgba(102, 126, 234, 0.04);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.inner-group-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 8px 14px;
+    background: rgba(102, 126, 234, 0.12);
+    border-radius: 8px;
+    color: #4a5568;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.inner-group-title > span:first-child {
+    word-break: break-word;
+    text-align: center;
+}
+
+/* 分组模式下，「添加游戏」按钮单独占一行 */
+.games-grid-addonly {
+    grid-template-columns: 1fr;
+    margin-top: 16px;
+}
+
 /* 年度柱状图容器 */
 .year-chart {
     width: 100%;
