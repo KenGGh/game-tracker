@@ -1717,6 +1717,10 @@ class GameTracker {
 
         // 生成星级评分显示（只显示实心，没评分不显示）
         const renderRating = () => {
+            // 特殊游戏：固定显示牛和啤酒 emoji（与评分无关）
+            if ((game.name || '').trim() === '昭和米国物语') {
+                return `<span class="card-rating">🐮🍺</span>`;
+            }
             if (!game.rating) return '<span class="card-rating">&nbsp;</span>';
             const stars = '❤'.repeat(game.rating);
             return `<span class="card-rating">${stars}</span>`;
