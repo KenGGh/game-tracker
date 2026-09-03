@@ -1754,7 +1754,17 @@ class GameTracker {
                         const card = document.querySelector(`.game-card[data-game-id="${game.id}"]`);
                         const cardMiddle = card ? card.querySelector('.card-middle') : null;
                         if (cardMiddle) {
-                            cardMiddle.innerHTML = `<img src="${imageData}" alt="封面" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">`;
+                            // 只替换占位 div，保留 achievement-overlay 等其它子节点
+                            const placeholder = cardMiddle.querySelector('.card-cover-loading');
+                            const img = document.createElement('img');
+                            img.src = imageData;
+                            img.alt = '封面';
+                            img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; border-radius: 4px;';
+                            if (placeholder) {
+                                placeholder.replaceWith(img);
+                            } else {
+                                cardMiddle.insertBefore(img, cardMiddle.firstChild);
+                            }
                         }
                         if (card) {
                             // 添加背景类和设置背景图片（通过CSS变量设置伪元素背景）
