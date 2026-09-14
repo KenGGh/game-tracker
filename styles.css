@@ -1038,7 +1038,85 @@ body {
         0px -2px 0 #121314;
 }
 
-/* ========== 添加游戏卡片样式 ========== */
+/* ===================== 全成就镭射镀膜 ===================== */
+.game-card.full-achievement {
+    /* 移除白色内描边，避免与镀膜叠加产生白雾；改用金色边框 */
+    box-shadow:
+        15px 15px 30px rgba(0, 0, 0, 0.5),
+        0 0 0 2px rgba(255, 215, 0, 0.5) inset;
+}
+
+/* 闪卡全息镭射：哑光银底 + 几个大柔光彩色斑（参考图风格） */
+.game-card.full-achievement .holo-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    /* 大柔光彩色斑（5~6 块，覆盖整张卡片，柔和粉彩色调） */
+    background-image:
+        radial-gradient(ellipse 65% 55% at 15% 85%, rgba(255, 60, 160, 1) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 50% at 25% 18%, rgba(130, 240, 90, 1) 0%, transparent 65%),
+        radial-gradient(ellipse 55% 60% at 45% 30%, rgba(255, 220, 80, 0.95) 0%, transparent 65%),
+        radial-gradient(ellipse 70% 50% at 78% 55%, rgba(80, 200, 255, 1) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 65% at 30% 65%, rgba(170, 110, 255, 1) 0%, transparent 65%),
+        radial-gradient(ellipse 55% 50% at 90% 18%, rgba(255, 150, 220, 0.95) 0%, transparent 65%);
+    /* 模糊让色斑边缘更柔；hue-rotate 由 JS 根据倾斜角度实时写入 */
+    filter: blur(6px) saturate(1.4);
+    opacity: 1;
+    /* 不加 transition：让 hue-rotate 完全跟随鼠标实时变化 */
+}
+
+/* 扫光效果：一个亮白色矩形斜着从左下扫到右上 */
+.game-card.full-achievement::after {
+    content: '';
+    position: absolute;
+    top: -50%;          /* 矩形向上下各超出卡片 50%，确保旋转后覆盖对角线 */
+    left: 0;
+    width: 80%;         /* 矩形宽度（占卡片 80%） */
+    height: 200%;       /* 矩形高度：超出卡片范围 */
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 5;
+    /* 矩形带渐变（中间最亮，向两侧淡出），旋转 20° 后呈斜向 */
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.95) 50%,
+        transparent 100%
+    );
+    /* 倾斜 20°（斜向矩形） + 初始位置在卡片外左侧 */
+    transform: translateX(-120%) rotate(20deg);
+    transform-origin: center center;
+    opacity: 0;
+    transition: none;
+}
+
+/* 鼠标进入卡片时，触发扫光动画 */
+.game-card.full-achievement.tilt::after {
+    animation: holo-sweep 0.5s ease-out forwards;
+}
+
+/* 扫光动画：从左下扫到右上 */
+@keyframes holo-sweep {
+    0% {
+        transform: translateX(-120%) rotate(20deg);
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(220%) rotate(20deg);
+        opacity: 0;
+    }
+}
+
+
+
+/* ===================== 添加游戏卡片样式 ===================== */
 .add-game-card {
     background: #f7fafc;
     border-radius: 15px;

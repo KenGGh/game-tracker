@@ -167,7 +167,7 @@ class GameTracker {
                 const rect = card.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
-                
+
                 if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
                     const centerX = rect.width / 2;
                     const centerY = rect.height / 2;
@@ -175,24 +175,34 @@ class GameTracker {
 
                     const rotateX = -(y - centerY) / 20;
                     const rotateY = -(centerX - x) / 20;
-                    
+
 
                     const translateX = (centerX - x) / 50;
                     const translateY = (centerY - y) / 50;
-                    
+
                     card.classList.add('tilt');
                     card.style.transform = `perspective(1000px) translateX(${-translateX}px) translateY(${-translateY}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-                    
+
                     // 反光效果：朝向左上光源时变亮，朝向右下阴影时变暗
-                    // rotateX<0（鼠标在上）+ rotateY>0（鼠标在左）= 左上 = 更亮
-                    // rotateX>0（鼠标在下）+ rotateY<0（鼠标在右）= 右下 = 更暗
+                    // 鼠标在左上 → rotateX>0 且 rotateY<0，rotateX - rotateY 为正 → 亮
                     const tiltFactor = (rotateX - rotateY) / 20;
-                    const brightness = 1 + tiltFactor * 0.5;
+                    const brightness = 1 + tiltFactor * 0.4;
                     card.style.filter = `brightness(${brightness})`;
+
+                    // 镀膜色相根据倾斜角度实时变化（亮的方向更偏暖，阴影方向更偏冷）
+                    const holoOverlay = card.querySelector('.holo-overlay');
+                    if (holoOverlay) {
+                        const hue = (rotateX - rotateY) * 4; // rotateX/Y 单位是度，乘 4 让小角度也能明显变色
+                        holoOverlay.style.filter = `blur(6px) hue-rotate(${hue}deg) saturate(1.5)`;
+                    }
                 } else {
                     card.classList.remove('tilt');
                     card.style.transform = '';
                     card.style.filter = '';
+                    const holoOverlay = card.querySelector('.holo-overlay');
+                    if (holoOverlay) {
+                        holoOverlay.style.filter = '';
+                    }
                 }
             });
         });
@@ -1787,11 +1797,13 @@ class GameTracker {
         }
 
         // 简化的纵向卡牌 - 分成上中下三部分
+        const fullAchClass = game.fullAchievements ? 'full-achievement' : '';
         return `
-            <div class="game-card ${hasBgClass}"
+            <div class="game-card ${hasBgClass} ${fullAchClass}"
                  data-game-id="${game.id}"
                  onclick="gameTracker.handleCardClick(event, ${game.id})"
                  style="--bg-image: url('${coverData || ''}'); border-color: ${borderColor}; background: ${bgColor};">
+                ${game.fullAchievements ? '<div class="holo-overlay" aria-hidden="true"></div>' : ''}
                 <div class="card-top">
                     <span class="card-title">${this.escapeHtml(game.name)}</span>
                     ${game.originalName ? `<span class="card-original-title">${this.escapeHtml(game.originalName)}</span>` : ''}
